@@ -781,7 +781,14 @@ def home(page: ft.Page, go_login):
         serial_connections = []
         for config in estado.serial_configs:
             try:
-                ser = serial.Serial(config["port"], config["baud_rate"], timeout=1)
+                ser = serial.Serial(
+                    port=config["port"],
+                    baudrate=config["baud_rate"],
+                    timeout=1,  # Reduzido para leituras mais rápidas
+                    parity=serial.PARITY_NONE,  # Configurações padrão, ajuste conforme o dispositivo
+                    stopbits=serial.STOPBITS_ONE,
+                    bytesize=serial.EIGHTBITS
+                )
                 serial_connections.append({"serial": ser, "gpio_number": config["gpio_number"]})
                 print(f"Conectado à porta {config['port']} com baud rate {config['baud_rate']}, GPIO {config['gpio_number']}")
             except serial.SerialException as e:
@@ -790,15 +797,24 @@ def home(page: ft.Page, go_login):
 
         def ler_uart(ser, port_name, gpio_number):
             """Lê dados de uma porta serial específica e passa o gpio_number."""
+            buffer = ""  # Buffer para acumular dados
             while True:
                 try:
                     if ser.in_waiting > 0:
-                        ser.reset_input_buffer()
-                        qr_code_data = ser.readline().decode('utf-8', errors='ignore').strip()
-                        if qr_code_data:
-                            print(f"Dados recebidos de {port_name} (GPIO {gpio_number}): {qr_code_data}")
-                            scan_result(qr_code_data, gpio_number)
-                    time.sleep(0.3)
+                        # Lê todos os bytes disponíveis
+                        data = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
+                        buffer += data
+                        print(f"Dados brutos recebidos de {port_name} (GPIO {gpio_number}): {repr(data)}")  # Log para depuração
+                        # Verifica se há uma linha completa (terminada em \n ou \r\n)
+                        if '\n' in buffer or '\r' in buffer:
+                            lines = buffer.splitlines()
+                            for line in lines[:-1]:  # Processa linhas completas
+                                line = line.strip()
+                                if line:
+                                    print(f"QR code processado de {port_name} (GPIO {gpio_number}): {line}")
+                                    scan_result(line, gpio_number)
+                            buffer = lines[-1] if lines else ""  # Mantém dados incompletos no buffer
+                    time.sleep(0.01)  # Reduzido para maior responsividade
                 except serial.SerialException as e:
                     print(f"Erro na leitura da porta {port_name}: {e}")
                     time.sleep(1)
