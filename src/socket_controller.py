@@ -39,9 +39,9 @@ def atualizar_status(data):
                 if item["referencia"] == "rasperry-pi4" and item["password"] == "123456":
                     match item["comando"]:
                         case "openDoor1":
-                            ativar_relay()
+                            ativar_relay(34)
                         case "openDoor2":
-                            ativar_relay()
+                            ativar_relay(35)
             else:
                 print("Chave 'referencia' não encontrada ❌")
         except Exception as e:

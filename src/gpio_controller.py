@@ -29,3 +29,9 @@ else:
             print(f"Simulando ativação do relé no GPIO {gpio_number}")
         except Exception as e:
             print(e)
+    
+    def desativar_relay(gpio_number: int):
+        try:
+            print(f"Simulando desativação do relé no GPIO {gpio_number}")
+        except Exception as e:
+            print(e)

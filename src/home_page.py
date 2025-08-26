@@ -28,13 +28,19 @@ def home(page: ft.Page, go_login):
 
     # Carregar configurações seriais do client_storage (se existirem)
     estado.serial_configs = page.client_storage.get("serial_configs") or [
-        {"port": "/dev/ttyS0", "baud_rate": 9600, "gpio_number": 17},
+        {"port": "/dev/ttyS1", "baud_rate": 9600, "gpio_number": 34},
     ]
 
     # Campos para o diálogo de configuração de portas seriais
+    gpio_default_field = ft.TextField(
+        label="GPIO Number default (ex.: 34)", 
+        on_change=lambda e: page.client_storage.set("default_gpio_number", e.control.value), 
+        keyboard_type=ft.KeyboardType.NUMBER, 
+        value=str(page.client_storage.get("default_gpio_number") or 34)
+    )
     port_field = ft.TextField(label="Porta Serial (ex.: /dev/ttyS0)")
     baud_field = ft.TextField(label="Baud Rate (ex.: 9600)", keyboard_type=ft.KeyboardType.NUMBER)
-    gpio_field = ft.TextField(label="GPIO Number (ex.: 17)", keyboard_type=ft.KeyboardType.NUMBER)
+    gpio_field = ft.TextField(label="GPIO Number (ex.: 34)", keyboard_type=ft.KeyboardType.NUMBER)
     serial_configs_list = ft.ListView(expand=False, spacing=5, padding=10)
 
     def update_serial_configs_list():
@@ -106,6 +112,7 @@ def home(page: ft.Page, go_login):
     # Diálogo para gerenciar portas seriais
     serial_config_modal = ft.AlertDialog(
         modal=True,
+        title_text_style=ft.TextStyle(size=17),
         title=ft.Text("Gerenciar portas seriais"),
         content=ft.Column(
             width=400,
@@ -113,8 +120,24 @@ def home(page: ft.Page, go_login):
             spacing=12.0,
             tight=True,
             controls=[
-                port_field,
-                baud_field,
+                gpio_default_field,
+                ft.Divider(),
+                ft.Row(
+                    wrap=True,
+                    expand=False,
+                    width=400,
+                    spacing=10.0,
+                    controls=[
+                        ft.Container(
+                            content=port_field,
+                            width=195
+                        ),
+                        ft.Container(
+                            content=baud_field,
+                            width=195
+                        ),
+                    ]
+                ),
                 gpio_field,
                 button("Adicionar porta", on_click=add_serial_config),
                 ft.Divider(),
@@ -656,7 +679,7 @@ def home(page: ft.Page, go_login):
                 qr_code = ''.join(scanned_input)
                 if qr_code:
                     scanned_input.clear()
-                    scan_result(qr_code, 17)  # Usando GPIO 17 como padrão
+                    scan_result(qr_code, int(page.client_storage.get("default_gpio_number")) or 34)
                     
         last_key_time = current_time
 
@@ -682,7 +705,7 @@ def home(page: ft.Page, go_login):
         else:
             show_snack_bar("QRCode inválido!", ft.Colors.RED)
 
-    def check(qrdata: dict, gpio_number: int = 17):
+    def check(qrdata: dict, gpio_number: int = 34):
         """Verifica o QRCode."""
         token = page.client_storage.get("token")
         headers = {"Authorization": f"Bearer {token}"}
