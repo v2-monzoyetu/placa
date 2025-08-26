@@ -1,22 +1,27 @@
 import time
 import platform
-from gpiozero import OutputDevice
 
 RUNNING_ON_PI = platform.system() == "Linux"
 
 if RUNNING_ON_PI:
+    from periphery import GPIO
     # Funções para controlar os relés
-    def activar_relay(gpio_number):
+    def ativar_relay(gpio_number: int):
         try:
-            relay = OutputDevice(gpio_number, active_high=False, initial_value=False)
-            relay.on()
+            # Configura o pino GPIO como saída
+            gpio = GPIO(gpio_number, "out")
+            # Ativa o relé (definir como baixo, já que active_high=False no código original)
+            gpio.write(0)
             time.sleep(0.5)
-            relay.off()
+            # Desativa o relé
+            gpio.write(1)
+            # Fecha o pino GPIO
+            gpio.close()
         except Exception as e:
-            print(e)
+            print(f"Erro ao controlar o relé no GPIO {gpio_number}: {e}")
 else:
-    def activar_relay(gpio_number):
+    def ativar_relay(gpio_number: int):
         try:
-            print(gpio_number)
+            print(f"Simulando ativação do relé no GPIO {gpio_number}")
         except Exception as e:
             print(e)

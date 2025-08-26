@@ -3,7 +3,7 @@ import json
 import flet as ft
 import socketio
 from functools import partial
-from gpio_controller import ligar_rele1, ligar_rele2
+from gpio_controller import ativar_relay
 
 sio = socketio.Client()
 sio_url = "https://socket.monzoyetu.com"
@@ -39,9 +39,9 @@ def atualizar_status(data):
                 if item["referencia"] == "rasperry-pi4" and item["password"] == "123456":
                     match item["comando"]:
                         case "openDoor1":
-                            ligar_rele1()
+                            ativar_relay()
                         case "openDoor2":
-                            ligar_rele2()
+                            ativar_relay()
             else:
                 print("Chave 'referencia' não encontrada ❌")
         except Exception as e:
