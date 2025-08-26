@@ -11,10 +11,10 @@ if RUNNING_ON_PI:
             # Configura o pino GPIO como saída
             gpio = GPIO(gpio_number, "out")
             # Ativa o relé (definir como baixo, já que active_high=False no código original)
-            gpio.write(0)
+            gpio.write(False)
             time.sleep(0.5)
             # Desativa o relé
-            gpio.write(1)
+            gpio.write(True)
             # Fecha o pino GPIO
             gpio.close()
         except Exception as e:
