@@ -790,9 +790,7 @@ def home(page: ft.Page, go_login):
                 
                 # Inicializa o GPIO como desligado
                 try:
-                    gpio = desativar_relay(config["gpio_number"])
-                    gpio.write(True)
-                    gpio.close()
+                    desativar_relay(config["gpio_number"])
                 except Exception as e:
                     print(f"Erro ao inicializar GPIO {config['gpio_number']} como desligado: {e}")
                     continue
