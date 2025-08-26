@@ -7,7 +7,7 @@ from util import is_valid_base64
 from process_status import process_list_item, process_status 
 from widget import menubutton, button
 from api_client import get, API_URL
-from gpio_controller import ativar_relay
+from gpio_controller import ativar_relay, desativar_relay
 from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
 import serial
 import threading
@@ -787,6 +787,16 @@ def home(page: ft.Page, go_login):
         serial_connections = []
         for config in estado.serial_configs:
             try:
+                
+                # Inicializa o GPIO como desligado
+                try:
+                    gpio = desativar_relay(config["gpio_number"])
+                    gpio.write(True)
+                    gpio.close()
+                except Exception as e:
+                    print(f"Erro ao inicializar GPIO {config['gpio_number']} como desligado: {e}")
+                    continue
+            
                 ser = serial.Serial(
                     port=config["port"],
                     baudrate=config["baud_rate"],

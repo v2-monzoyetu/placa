@@ -12,13 +12,21 @@ if RUNNING_ON_PI:
             gpio = GPIO(gpio_number, "out")
             # Ativa o relé (definir como baixo, já que active_high=False no código original)
             gpio.write(False)
-            time.sleep(0.5)
+            time.sleep(1)  # Mantém o relé ativado por 1 segundo
             # Desativa o relé
             gpio.write(True)
             # Fecha o pino GPIO
             gpio.close()
         except Exception as e:
             print(f"Erro ao controlar o relé no GPIO {gpio_number}: {e}")
+    
+    def desativar_relay(gpio_number: int):
+        try:
+            gpio = GPIO(gpio_number, "out")
+            gpio.write(True)
+            gpio.close()
+        except Exception as e:
+            print(f"Erro ao desativar o relé no GPIO {gpio_number}: {e}")
 else:
     def ativar_relay(gpio_number: int):
         try:
