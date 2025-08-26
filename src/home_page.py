@@ -797,24 +797,15 @@ def home(page: ft.Page, go_login):
 
         def ler_uart(ser, port_name, gpio_number):
             """Lê dados de uma porta serial específica e passa o gpio_number."""
-            buffer = ""  # Buffer para acumular dados
             while True:
                 try:
                     if ser.in_waiting > 0:
-                        # Lê todos os bytes disponíveis
-                        data = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
-                        buffer += data
-                        print(f"Dados brutos recebidos de {port_name} (GPIO {gpio_number}): {repr(data)}")  # Log para depuração
-                        # Verifica se há uma linha completa (terminada em \n ou \r\n)
-                        if '\n' in buffer or '\r' in buffer:
-                            lines = buffer.splitlines()
-                            for line in lines[:-1]:  # Processa linhas completas
-                                line = line.strip()
-                                if line:
-                                    print(f"QR code processado de {port_name} (GPIO {gpio_number}): {line}")
-                                    scan_result(line, gpio_number)
-                            buffer = lines[-1] if lines else ""  # Mantém dados incompletos no buffer
-                    time.sleep(0.01)  # Reduzido para maior responsividade
+                        data = ser.read(ser.in_waiting).decode('utf-8', errors='ignore').strip()
+                        if data:  # Processa apenas se houver dados válidos
+                            print(f"Dados brutos recebidos de {port_name} (GPIO {gpio_number}): {repr(data)}")
+                            print(f"QR code processado de {port_name} (GPIO {gpio_number}): {data}")
+                            scan_result(data, gpio_number)
+                    time.sleep(0.1)  # Igual ao código de teste
                 except serial.SerialException as e:
                     print(f"Erro na leitura da porta {port_name}: {e}")
                     time.sleep(1)
