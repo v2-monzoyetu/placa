@@ -339,7 +339,7 @@ def home(page: ft.Page, go_login):
         page.update()
     
     #Lista de processos 
-    list_process  = ft.ListView(expand=True, spacing=1, padding=0.0, reverse=False)
+    list_process  = ft.ListView(expand=True, spacing=1, padding=0.0, reverse=True)
     count_process = ft.Text(f"Processos ativos: ({len(list_process.controls)})", size=14, weight=ft.FontWeight.BOLD)
     process_area = ft.Column(
         alignment=ft.MainAxisAlignment.CENTER,
@@ -381,8 +381,12 @@ def home(page: ft.Page, go_login):
             
             # Criando o item inicial com status "load"
             tile = process_list_item(message, "n/a", "load")
-            list_process.controls.append(tile)
+            list_process.controls.insert(0, tile)
             update_length()
+            list_process.scroll_to(offset=0, duration=500)
+            
+            if(list_process.length > 10):
+                clear_process(None)
             
             # Verifica os dados
             verify: dict = check(qrdata)
@@ -472,6 +476,7 @@ def home(page: ft.Page, go_login):
         if list_process.controls:
             list_process.controls.clear()
             update_length()
+            list_process.scroll_to(offset=0, duration=500)
             
     #interface
     pagelet = ft.Pagelet(
