@@ -385,7 +385,7 @@ def home(page: ft.Page, go_login):
             update_length()
             list_process.scroll_to(offset=0, duration=500)
             
-            if(list_process.length > 10):
+            if(len(list_process.controls) > 10):
                 clear_process(None)
             
             # Verifica os dados
