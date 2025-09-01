@@ -35,7 +35,7 @@ def home(page: ft.Page, go_login):
         snack_bar.bgcolor = bgcolor
         snack_bar.open = True
         page.update()
-    page.client_storage.clear()    
+
     # Carregar configurações seriais do client_storage (se existirem)
     estado.serial_configs = page.client_storage.get("serial_configs") or [
         {"port": "/dev/ttyS1", "baud_rate": 9600, "gpio_number": 34, "type": "ENTRY"},
