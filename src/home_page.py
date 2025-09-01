@@ -633,7 +633,6 @@ def home(page: ft.Page, go_login):
     
     def scan_result(result: str, gpio_number: int, type: str = "ENTRY"):
         """Processa o resultado escaneado."""
-        print(result)
         if is_valid_base64(result):
             try:
                 value = base64.b64decode(result).decode("utf-8")
