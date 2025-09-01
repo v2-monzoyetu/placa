@@ -1,18 +1,17 @@
-import base64
 import json
-import platform
-import requests
-import flet as ft
-from util import is_valid_base64
-from process_status import process_list_item, process_status 
-from widget import menubutton, button
-from api_client import get, API_URL
-from gpio_controller import ativar_relay, desativar_relay
-from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
-import serial
-import threading
-from pynput import keyboard
 import time
+import serial
+import base64
+import platform
+import threading
+import flet as ft
+from pynput import keyboard
+from util import is_valid_base64
+from api_client import get
+from widget import menubutton, button
+from gpio_controller import desativar_relay
+from process_area import ProcessItem
+from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
 
 RUNNING_ON_PI = platform.system() == "Linux"
 
@@ -26,9 +25,20 @@ estado = Estado()
 
 def home(page: ft.Page, go_login):
 
+    # SnackBar para feedback
+    snack_bar = ft.SnackBar(content=ft.Text("", color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD), bgcolor=ft.Colors.GREY)
+    page.snack_bar = snack_bar
+
+    def show_snack_bar(message: str, bgcolor=ft.Colors.GREY):
+        """Exibe o SnackBar com a mensagem desejada"""
+        snack_bar.content.value = message
+        snack_bar.bgcolor = bgcolor
+        snack_bar.open = True
+        page.update()
+        
     # Carregar configurações seriais do client_storage (se existirem)
     estado.serial_configs = page.client_storage.get("serial_configs") or [
-        {"port": "/dev/ttyS1", "baud_rate": 9600, "gpio_number": 34},
+        {"port": "/dev/ttyS1", "baud_rate": 9600, "gpio_number": 34, "type": "ENTRY"},
     ]
 
     # Campos para o diálogo de configuração de portas seriais
@@ -41,6 +51,7 @@ def home(page: ft.Page, go_login):
     port_field = ft.TextField(label="Porta Serial (ex.: /dev/ttyS0)")
     baud_field = ft.TextField(label="Baud Rate (ex.: 9600)", keyboard_type=ft.KeyboardType.NUMBER)
     gpio_field = ft.TextField(label="GPIO Number (ex.: 34)", keyboard_type=ft.KeyboardType.NUMBER)
+    type_field = ft.TextField(label="Tipo (ENTRY OR EXIT)", keyboard_type=ft.KeyboardType.TEXT)
     serial_configs_list = ft.ListView(expand=False, spacing=5, padding=10)
 
     def update_serial_configs_list():
@@ -50,7 +61,7 @@ def home(page: ft.Page, go_login):
             serial_configs_list.controls.append(
                 ft.Row(
                     controls=[
-                        ft.Text(f"Porta: {config['port']}, Baud: {config['baud_rate']}, GPIO: {config['gpio_number']}", size=14),
+                        ft.Text(f"Porta: {config['port']}, Baud: {config['baud_rate']}, GPIO: {config['gpio_number']}, Tipo: {config['type']}", size=14),
                         ft.IconButton(
                             icon=ft.Icons.DELETE,
                             icon_color=ft.Colors.RED,
@@ -66,31 +77,24 @@ def home(page: ft.Page, go_login):
         port = port_field.value.strip()
         baud = baud_field.value.strip()
         gpio = gpio_field.value.strip()
+        type = type_field.value.strip()
         if not port or not baud or not gpio:
-            page.snack_bar.content.value = "Preencha porta, baud rate e número do GPIO!"
-            page.snack_bar.bgcolor = ft.Colors.RED
-            page.snack_bar.open = True
-            page.update()
+            show_snack_bar("Preencha porta, baud rate e número do GPIO!", ft.Colors.RED)
             return
         try:
             baud_rate = int(baud)
             gpio_number = int(gpio)
-            estado.serial_configs.append({"port": port, "baud_rate": baud_rate, "gpio_number": gpio_number})
+            estado.serial_configs.append({"port": port, "baud_rate": baud_rate, "gpio_number": gpio_number, "type": type})
             page.client_storage.set("serial_configs", estado.serial_configs)
             port_field.value = ""
             baud_field.value = ""
             gpio_field.value = ""
+            type_field.value = ""
             update_serial_configs_list()
-            serial_configs_list.update()  # Agora seguro, pois o diálogo está na página
-            page.snack_bar.content.value = "Configuração adicionada com sucesso!"
-            page.snack_bar.bgcolor = ft.Colors.GREEN
-            page.snack_bar.open = True
-            page.update()
+            serial_configs_list.update()
+            show_snack_bar("Configuração adicionada com sucesso!", ft.Colors.GREEN)
         except ValueError:
-            page.snack_bar.content.value = "Baud rate e GPIO devem ser números!"
-            page.snack_bar.bgcolor = ft.Colors.RED
-            page.snack_bar.open = True
-            page.update()
+            show_snack_bar("Baud rate e GPIO devem ser números!", ft.Colors.RED)
 
     def remove_serial_config(config):
         """Remove uma configuração de porta serial."""
@@ -98,10 +102,7 @@ def home(page: ft.Page, go_login):
         page.client_storage.set("serial_configs", estado.serial_configs)
         update_serial_configs_list()
         serial_configs_list.update()
-        page.snack_bar.content.value = "Configuração removida com sucesso!"
-        page.snack_bar.bgcolor = ft.Colors.GREEN
-        page.snack_bar.open = True
-        page.update()
+        show_snack_bar("Configuração removida com sucesso!", ft.Colors.GREEN)
 
     def show_serial_config_dialog(e):
         """Abre o diálogo de configuração de portas seriais."""
@@ -115,13 +116,71 @@ def home(page: ft.Page, go_login):
         title_text_style=ft.TextStyle(size=17),
         title=ft.Text("Gerenciar portas seriais"),
         content=ft.Column(
-            width=400,
+            width=440,
             wrap=False,
-            spacing=12.0,
+            spacing=10.0,
             tight=True,
             controls=[
                 gpio_default_field,
                 ft.Divider(),
+                ft.Row(
+                    wrap=True,
+                    expand=False,
+                    width=440,
+                    spacing=10.0,
+                    controls=[
+                        ft.Container(
+                            content=port_field,
+                            width=215
+                        ),
+                        ft.Container(
+                            content=baud_field,
+                            width=215
+                        ),
+                    ]
+                ),
+                ft.Row(
+                    wrap=True,
+                    expand=False,
+                    width=440,
+                    spacing=10.0,
+                    controls=[
+                        ft.Container(
+                            content=gpio_field,
+                            width=215
+                        ),
+                        ft.Container(
+                            content=type_field,
+                            width=215
+                        ),
+                    ]
+                ),
+                serial_configs_list,
+                button("Adicionar porta", on_click=add_serial_config),
+            ],
+        ),
+        actions=[
+            ft.TextButton("Fechar", on_click=lambda e: page.close(serial_config_modal)),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    
+    def show_gpio_config_dialog(e):
+        update_serial_configs_list()
+        page.open(gpio_config_modal)
+        serial_configs_list.update()
+        
+    # Diálogo para gerenciar portas gpio
+    gpio_config_modal = ft.AlertDialog(
+        modal=True,
+        title_text_style=ft.TextStyle(size=17),
+        title=ft.Text("Gerenciar portas gpio"),
+        content=ft.Column(
+            width=400,
+            wrap=False,
+            spacing=10.0,
+            tight=True,
+            controls=[
                 ft.Row(
                     wrap=True,
                     expand=False,
@@ -130,19 +189,15 @@ def home(page: ft.Page, go_login):
                     controls=[
                         ft.Container(
                             content=port_field,
-                            width=195
+                            width=215
                         ),
                         ft.Container(
                             content=baud_field,
-                            width=195
+                            width=215
                         ),
                     ]
                 ),
-                gpio_field,
                 button("Adicionar porta", on_click=add_serial_config),
-                ft.Divider(),
-                ft.Text("Portas configuradas:", weight=ft.FontWeight.BOLD),
-                serial_configs_list,
             ],
         ),
         actions=[
@@ -150,50 +205,22 @@ def home(page: ft.Page, go_login):
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-
-    # SnackBar para feedback
-    snack_bar = ft.SnackBar(content=ft.Text("", color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD), bgcolor=ft.Colors.GREY)
-    page.snack_bar = snack_bar
-
-    def show_snack_bar(message, bgcolor=ft.Colors.GREY):
-        """Exibe o SnackBar com a mensagem desejada"""
-        snack_bar.content.value = message
-        snack_bar.bgcolor = bgcolor
-        snack_bar.open = True
-        page.update()
         
     #checar codigo
-    def manual_check(type, modal, field):
-        code = field.value
-        if(code == ''):
+    def manual_check(check_type, modal, field):
+        code = field.value.strip()
+        if not code:
             field.focus()
-            show_snack_bar('Insira um código valido!', ft.Colors.RED)
+            show_snack_bar("Insira um código válido!", ft.Colors.RED)
             return
-        
         page.close(modal)
-        field.value = ''
-        add_item()
-    
-    snack_bar = ft.SnackBar(content=ft.Text("", color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD), bgcolor=ft.Colors.GREY)
-    page.snack_bar = snack_bar
-    
-    def show_snack_bar(message, bgcolor=ft.Colors.GREY):
-        """Exibe o SnackBar com a mensagem desejada"""
-        snack_bar.content.value = message
-        snack_bar.bgcolor = bgcolor
-        snack_bar.open = True
-        page.update()
+        field.value = ""
+        add_item({"type": check_type, "code": code}, int(page.client_storage.get("default_gpio_number") or 34))
     
     def logout(e=None):
         page.close(dlg_modal)
         page.client_storage.clear()
         go_login()
-        
-    def dlg_modal_close(e=None):
-        page.close(dlg_modal)
-        
-    def show_logout_dialog(e=None):
-        page.open(dlg_modal)
         
     # Criando o AlertDialog
     dlg_modal = ft.AlertDialog(
@@ -203,7 +230,7 @@ def home(page: ft.Page, go_login):
         content=ft.Text("Tem certeza que deseja sair?"),
         actions=[
             ft.TextButton("Sim", on_click=logout),
-            ft.TextButton("Não", on_click=dlg_modal_close),
+            ft.TextButton("Não", on_click=lambda e:page.close(dlg_modal)),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
@@ -292,10 +319,6 @@ def home(page: ft.Page, go_login):
         actions_alignment=ft.MainAxisAlignment.END,
     )
     
-    #Socket
-    register_socket_events(page)
-    conectar()
-    
     #Lista de condominios
     list_condominios   = ft.ListView(expand=True, spacing=1, padding=0.0)
     
@@ -364,6 +387,7 @@ def home(page: ft.Page, go_login):
     #Lista de processos 
     list_process  = ft.ListView(expand=True, spacing=1, padding=0.0, reverse=False)
     count_process = ft.Text(f"Processos ativos: ({len(list_process.controls)})", size=14, weight=ft.FontWeight.BOLD)
+    
     process_area = ft.Column(
         alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -383,124 +407,40 @@ def home(page: ft.Page, go_login):
             )
         ]
     )
-    
+
+    def add_item(qrdata: dict, gpio_number: int, type: str = "ENTRY"):
+        """Adiciona um novo item à lista compartilhada."""
+        # Cria o item independente
+        try:
+            print("Adicionando item...")
+            process_item = ProcessItem(page, show_snack_bar, process_area, qrdata, gpio_number, type, on_complete_callback=update_length)
+            
+            if len(list_process.controls) > 100:
+                clear_process(None)
+            list_process.controls.insert(0, process_item)
+            update_length()
+            list_process.scroll_to(offset=0, duration=500)
+            page.update() 
+                
+            # Inicia o processamento independente do item
+            process_item.process()
+        except Exception as e:
+            print(f"Erro ao adicionar item: {str(e)}")
+            raise e
+
     def update_length():
-        """Atualiza o contador na interface."""
+        """Atualiza o contador da lista compartilhada."""
         count_process.value = f"Processos ativos: {len(list_process.controls)}"
         count_process.update()
         list_process.update()
 
-    def add_item(qrdata: dict, gpio_number: int):
-        """Adiciona um novo item à lista."""
-
-        try:
-            message = "Processando..."
-            if qrdata["type"] == "employee":
-                message = "Funcionário"
-            elif qrdata["type"] == "resident":
-                message = "Morador"
-            elif qrdata["type"] == "vehicle":
-                message = "Veículo"
-            
-            # Criando o item inicial com status "load"
-            tile = process_list_item(message, "n/a", "load")
-            
-            if(len(list_process.controls) > 10):
-                clear_process(None)
-                
-            list_process.controls.insert(0, tile)
-            update_length()
-            list_process.scroll_to(offset=0, duration=500)
-            
-            # Verifica os dados
-            verify: dict = check(qrdata)
-            response = verify.get("body", {})
-            result = response.get("result", {})
-
-            if result.get("success"):
-                item = result.get("data", {})
-                if qrdata["type"] == "employee":
-                    ativar_relay(gpio_number)
-                    checkValidation = validateEmployee(item[0].get("id", "0"), item[0].get("situation", "n/a"))
-                    if checkValidation:
-                        tile.title.value = "Funcionário"
-                        tile.subtitle.value = item[0].get("nome", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                        process_area.controls.clear()
-                        process_area.controls.append(process_status("Funcionário", funcionario=item[0]))
-                        process_area.update()
-                    else:
-                        tile.title.value = "Funcionário"
-                        tile.subtitle.value = item[0].get("nome", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-                elif qrdata["type"] == "resident":
-                    ativar_relay(gpio_number)
-                    checkValidation = validateResident(item[0].get("id", "0"), item[0].get("status", "1"))
-                    if checkValidation:
-                        tile.title.value = "Morador"
-                        tile.subtitle.value = item[0].get("nome", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                        process_area.controls.clear()
-                        process_area.controls.append(process_status("Morador", morador=item[0]))
-                        process_area.update()
-                    else:
-                        tile.title.value = "Morador"
-                        tile.subtitle.value = item[0].get("nome", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-                elif qrdata["type"] == "vehicle":
-                    ativar_relay(gpio_number)
-                    checkValidation = validateVehicle(item.get("id", "0"), item.get("motoristas", {})[0].get("id", "0"), item.get("situation", "1"))
-                    if checkValidation:
-                        tile.title.value = "Veículo"
-                        tile.subtitle.value = item.get("matricula", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                        process_area.controls.clear()
-                        process_area.controls.append(process_status("Veículo", veiculo=item))
-                        process_area.update()
-                    else:
-                        tile.title.value = "Veículo"
-                        tile.subtitle.value = item[0].get("matricula", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-                elif qrdata["type"] == "visitor":
-                    ativar_relay(gpio_number)
-                    checkValidation = validateVisitor(qrdata["code"])
-                    if checkValidation:
-                        tile.title.value = "Visitante"
-                        tile.subtitle.value = item.get("nome", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                        process_area.controls.clear()
-                        process_area.controls.append(process_status("Visitante", visitor=item))
-                        process_area.update()
-                    else:
-                        tile.title.value = "Visitante"
-                        tile.subtitle.value = item[0].get("nome", "n/a")
-                        tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-            else:
-                if(message == "Processando..."):
-                    message = "Desconhecido"
-                    
-                tile.title.value = message
-                tile.subtitle.value = "Negado"
-                tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-
-            list_process.update()
-            page.update()
-            
-        except Exception as e:
-            print(f"Erro ao processar o QRCode: {str(e)}")
-            message = "Desconhecido"
-            tile.title.value = message
-            tile.subtitle.value = "Negado"
-            tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-            list_process.update()
-
-
     def clear_process(e):
-        """Remove o último item da lista."""
+        """Limpa a lista compartilhada."""
         if list_process.controls:
             list_process.controls.clear()
             update_length()
             list_process.scroll_to(offset=0, duration=500)
+            page.update()
             
     #interface
     pagelet = ft.Pagelet(
@@ -523,10 +463,10 @@ def home(page: ft.Page, go_login):
                                     spacing=8.0,
                                     expand=True,
                                     controls=[
-                                        menubutton("Menu", ft.Icons.MENU, ft.Colors.WHITE, lambda e:show_snack_bar("Indisponível", ft.Colors.RED)),
-                                        menubutton("Veículos", ft.Icons.CAR_RENTAL_SHARP, "#A8E349", lambda e: page.open(veiculo_modal)),
-                                        menubutton("Moradores", ft.Icons.PERSON, "#F858A2", lambda e: page.open(morador_modal)),
-                                        menubutton("Funcionários", ft.Icons.GROUP, "#CB9EF6", lambda e: page.open(funcionario_modal)),
+                                        menubutton("GPIO", ft.Icons.VIEW_COZY, ft.Colors.WHITE, show_gpio_config_dialog),
+                                        #menubutton("Veículos", ft.Icons.CAR_RENTAL_SHARP, "#A8E349", lambda e: page.open(veiculo_modal)),
+                                        #menubutton("Moradores", ft.Icons.PERSON, "#F858A2", lambda e: page.open(morador_modal)),
+                                        #menubutton("Funcionários", ft.Icons.GROUP, "#CB9EF6", lambda e: page.open(funcionario_modal)),
                                         ft.Container(expand=True),
                                         menubutton("Configurações", ft.Icons.SETTINGS, ft.Colors.WHITE, show_serial_config_dialog),
                                     ]
@@ -598,7 +538,7 @@ def home(page: ft.Page, go_login):
                                                                 ft.IconButton(
                                                                     icon=ft.Icons.LOGOUT_ROUNDED, 
                                                                     icon_color=ft.Colors.WHITE,
-                                                                    on_click=show_logout_dialog
+                                                                    on_click=lambda e: page.open(dlg_modal),
                                                                 )
                                                             ]
                                                         )
@@ -679,7 +619,10 @@ def home(page: ft.Page, go_login):
                 qr_code = ''.join(scanned_input)
                 if qr_code:
                     scanned_input.clear()
-                    scan_result(qr_code, int(page.client_storage.get("default_gpio_number")) or 34)
+                    try:
+                        scan_result(qr_code, int(page.client_storage.get("default_gpio_number")), "ENTRY")
+                    except Exception as e:
+                        scan_result(qr_code, 34, "ENTRY")
                     
         last_key_time = current_time
 
@@ -691,119 +634,19 @@ def home(page: ft.Page, go_login):
     # Inicia a thread do pynput
     threading.Thread(target=start_listener, daemon=True).start()
     
-    def scan_result(result: str, gpio_number: int):
+    def scan_result(result: str, gpio_number: int, type: str = "ENTRY"):
         """Processa o resultado escaneado."""
         if is_valid_base64(result):
             try:
                 value = base64.b64decode(result).decode("utf-8")
                 qrdata = json.loads(value)
-                add_item(qrdata, gpio_number)
+                add_item(qrdata, gpio_number, type)
             except Exception as e:
                 show_snack_bar(f"Erro ao processar o QRCode: {str(e)}", ft.Colors.RED)
         elif len(result.strip()) == 20 or len(result.strip()) == 10:
-            check({"code": result}, gpio_number)
+            add_item({"code": result}, gpio_number, 'Entry')
         else:
             show_snack_bar("QRCode inválido!", ft.Colors.RED)
-
-    def check(qrdata: dict, gpio_number: int = 34):
-        """Verifica o QRCode."""
-        token = page.client_storage.get("token")
-        headers = {"Authorization": f"Bearer {token}"}
-        if qrdata.get("code"):
-            param = f"?code={qrdata.get('code')}"
-            route = f"{API_URL}/v1/concierge/check/visitor/{page.client_storage.get('condominio_id')}{param}"
-        else:
-            param = f"?id={qrdata.get('id')}&type={qrdata.get('type')}&code={qrdata.get('code')}"
-            route = f"{API_URL}/v1/concierge/check/qrcode/{page.client_storage.get('condominio_id')}{param}"
-        try:
-            response = requests.get(route, headers=headers, timeout=10)
-            res_body = response.json()
-            return {'body': res_body}
-        except Exception as e:
-            show_snack_bar(f"Erro de conexão: {str(e)}", ft.Colors.RED)
-
-    def validateResident(id, status):
-        """Verifica o QRCode."""
-
-        token = page.client_storage.get("token")
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        route = f"{API_URL}/v1/concierge/valid/resident/{page.client_storage.get('condominio_id')}"
-
-        try:
-            response = requests.post(route, params={"id": id, "status": status}, headers=headers, timeout=10)
-            response.raise_for_status()
-            if response.status_code == 200:
-                return True
-            else:
-                return False
-                
-        except Exception as e:
-            return False
-            
-    def validateEmployee(id, situation):
-        """Verifica o QRCode."""
-
-        token = page.client_storage.get("token")
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        route = f"{API_URL}/v1/concierge/valid/employee/{page.client_storage.get('condominio_id')}"
-
-        try:
-            response = requests.post(route, params={"id": id, "situation": situation}, headers=headers, timeout=10)
-            response.raise_for_status()
-            if response.status_code == 200:
-                return True
-            else:
-                return False  
-        except Exception as e:
-            return False   
-    
-    def validateVehicle(id, motoristaId, status):
-        """Verifica o QRCode."""
-
-        token = page.client_storage.get("token")
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        route = f"{API_URL}/v1/concierge/viatura/{page.client_storage.get('condominio_id')}"
-
-        try:
-            response = requests.post(route, params={"id": id, "status": status, "motoristaId": motoristaId}, headers=headers, timeout=10)
-            response.raise_for_status()
-            if response.status_code == 200:
-                return True
-            else:
-                return False  
-        except Exception as e:
-            return False
-    
-    def validateVisitor(code):
-        """Verifica o QRCode."""
-
-        token = page.client_storage.get("token")
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        params = {
-            "code": code, 
-			"is_accompanied"    : "0", 
-            "number_companions" : "0",
-            "came_by_car"       : "0",
-            "plate"             : "n/a",
-            "obs"               : "n/a",
-        }
-        route = f"{API_URL}/v1/concierge/valid/visitor/{page.client_storage.get('condominio_id')}"
-
-        try:
-            response = requests.post(route, params=params, headers=headers, timeout=10)
-            response.raise_for_status()
-
-            if response.status_code == 200:
-                return True
-            else:
-                return False  
-        except Exception as e:
-            print(f"{str(e)}|")
-            return False
     
     # Configuração da porta serial
     if RUNNING_ON_PI:
@@ -821,18 +664,18 @@ def home(page: ft.Page, go_login):
                 ser = serial.Serial(
                     port=config["port"],
                     baudrate=config["baud_rate"],
-                    timeout=1,  # Reduzido para leituras mais rápidas
-                    parity=serial.PARITY_NONE,  # Configurações padrão, ajuste conforme o dispositivo
+                    timeout=1,
+                    parity=serial.PARITY_NONE,
                     stopbits=serial.STOPBITS_ONE,
                     bytesize=serial.EIGHTBITS
                 )
-                serial_connections.append({"serial": ser, "gpio_number": config["gpio_number"]})
+                serial_connections.append({"serial": ser, "gpio_number": config["gpio_number"], "type": config["type"]})
                 print(f"Conectado à porta {config['port']} com baud rate {config['baud_rate']}, GPIO {config['gpio_number']}")
             except serial.SerialException as e:
                 print(f"Erro ao abrir a porta {config['port']}: {e}")
                 continue
 
-        def ler_uart(ser, port_name, gpio_number):
+        def ler_uart(ser, port_name, gpio_number, type):
             """Lê dados de uma porta serial específica e passa o gpio_number."""
             while True:
                 try:
@@ -841,7 +684,7 @@ def home(page: ft.Page, go_login):
                         if data:  # Processa apenas se houver dados válidos
                             print(f"Dados brutos recebidos de {port_name} (GPIO {gpio_number}): {repr(data)}")
                             print(f"QR code processado de {port_name} (GPIO {gpio_number}): {data}")
-                            scan_result(data, gpio_number)
+                            scan_result(data, gpio_number, type)
                     time.sleep(0.1)  # Igual ao código de teste
                 except serial.SerialException as e:
                     print(f"Erro na leitura da porta {port_name}: {e}")
@@ -850,8 +693,9 @@ def home(page: ft.Page, go_login):
         for conn in serial_connections:
             ser = conn["serial"]
             gpio_number = conn["gpio_number"]
+            type = conn["type"]
             port_name = ser.port
-            thread = threading.Thread(target=ler_uart, args=(ser, port_name, gpio_number), daemon=True)
+            thread = threading.Thread(target=ler_uart, args=(ser, port_name, gpio_number, type), daemon=True)
             thread.start()
 
         def on_page_close(e):
@@ -869,5 +713,7 @@ def home(page: ft.Page, go_login):
     page.add(pagelet)
     page.add(snack_bar)
     page.update()
-    
     get_condominios()
+    #Socket
+    register_socket_events(page)
+    conectar()
