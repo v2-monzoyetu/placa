@@ -1,14 +1,18 @@
-
 import base64
+import re
 
-def is_valid_base64(data):
-    # Verifica se a string é um Base64 válido
+def is_valid_base64(data: str) -> bool:
     try:
-        # Base64 deve ter um comprimento múltiplo de 4
-        if len(data) % 4 != 0:
+        if len(data.strip()) % 4 != 0:
             return False
-        # Tenta decodificar
-        base64.b64decode(data)
+
+        if not re.fullmatch(r'^[A-Za-z0-9+/=]+$', data.strip()):
+            return False
+
+        decoded = base64.b64decode(data, validate=True)
+
+        decoded.decode("utf-8")  
+
         return True
     except Exception:
         return False

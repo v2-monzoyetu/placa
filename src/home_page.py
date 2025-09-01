@@ -9,7 +9,7 @@ from pynput import keyboard
 from util import is_valid_base64
 from api_client import get
 from widget import menubutton, button
-from gpio_controller import desativar_relay
+from gpio_controller import desativar_relay, ativar_relay
 from process_area import ProcessItem
 from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
 
@@ -53,6 +53,7 @@ def home(page: ft.Page, go_login):
     gpio_field = ft.TextField(label="GPIO Number (ex.: 34)", keyboard_type=ft.KeyboardType.NUMBER)
     type_field = ft.TextField(label="Tipo (ENTRY OR EXIT)", keyboard_type=ft.KeyboardType.TEXT)
     serial_configs_list = ft.ListView(expand=False, spacing=5, padding=10)
+    gpio_configs_list   = ft.Row(wrap=True, expand=False, width=440, spacing=10.0,)
 
     def update_serial_configs_list():
         """Atualiza a lista de configurações seriais exibida no diálogo."""
@@ -166,42 +167,40 @@ def home(page: ft.Page, go_login):
     )
     
     def show_gpio_config_dialog(e):
-        update_serial_configs_list()
+        update_gpio_configs_list()
         page.open(gpio_config_modal)
-        serial_configs_list.update()
+        gpio_configs_list.update()
         
+    def update_gpio_configs_list():
+        """Atualiza a lista de configurações seriais exibida no diálogo."""
+        gpio_configs_list.controls.clear()
+        for config in estado.serial_configs:
+            gpio_configs_list.controls.append(
+                ft.Container(
+                    content=button(
+                        f"GPIO {config['port']} - {config['gpio_number']}",
+                        on_click=lambda e, gpio=config['gpio_number']: ativar_relay(int(gpio))
+                    ),
+                    width=215
+                ),
+            )
+                    
     # Diálogo para gerenciar portas gpio
     gpio_config_modal = ft.AlertDialog(
         modal=True,
         title_text_style=ft.TextStyle(size=17),
         title=ft.Text("Gerenciar portas gpio"),
         content=ft.Column(
-            width=400,
+            width=440,
             wrap=False,
             spacing=10.0,
             tight=True,
             controls=[
-                ft.Row(
-                    wrap=True,
-                    expand=False,
-                    width=400,
-                    spacing=10.0,
-                    controls=[
-                        ft.Container(
-                            content=port_field,
-                            width=215
-                        ),
-                        ft.Container(
-                            content=baud_field,
-                            width=215
-                        ),
-                    ]
-                ),
-                button("Adicionar porta", on_click=add_serial_config),
+                gpio_configs_list
             ],
         ),
         actions=[
-            ft.TextButton("Fechar", on_click=lambda e: page.close(serial_config_modal)),
+            ft.TextButton("Fechar", on_click=lambda e: page.close(gpio_config_modal)),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
@@ -410,9 +409,7 @@ def home(page: ft.Page, go_login):
 
     def add_item(qrdata: dict, gpio_number: int, type: str = "ENTRY"):
         """Adiciona um novo item à lista compartilhada."""
-        # Cria o item independente
         try:
-            print("Adicionando item...")
             process_item = ProcessItem(page, show_snack_bar, process_area, qrdata, gpio_number, type, on_complete_callback=update_length)
             
             if len(list_process.controls) > 100:
@@ -644,7 +641,7 @@ def home(page: ft.Page, go_login):
             except Exception as e:
                 show_snack_bar(f"Erro ao processar o QRCode: {str(e)}", ft.Colors.RED)
         elif len(result.strip()) == 20 or len(result.strip()) == 10:
-            add_item({"code": result}, gpio_number, 'Entry')
+            add_item({"code": result}, gpio_number, type)
         else:
             show_snack_bar("QRCode inválido!", ft.Colors.RED)
     
