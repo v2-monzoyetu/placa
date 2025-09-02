@@ -11,6 +11,7 @@ def main(page: ft.Page):
     page.window.min_height = 700
     page.window.bgcolor    = "#141314"
     page.padding           = 0
+    page.window.maximized  = True
     
     page.theme         = ft.Theme(
         text_theme     = ft.TextTheme(
