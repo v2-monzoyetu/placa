@@ -259,7 +259,7 @@ def home(page: ft.Page, go_login):
         
         # Limpar banco de dados
         clear_database()
-        
+        time.sleep(0.5)  # Pequena pausa para garantir que o banco foi limpo
         page.close(dlg_modal)
         page.client_storage.clear()
         go_login()
@@ -784,6 +784,13 @@ def home(page: ft.Page, go_login):
 
         def on_page_close(e):
             """Fecha todas as portas seriais ao encerrar a aplicação."""
+            global sync_interval
+            # Cancelar sincronização periódica
+            if sync_interval and sync_interval.is_running:
+                sync_interval.cancel()
+                sync_interval = None
+                print("Sincronização periódica cancelada durante fechamento da página")
+            
             for conn in serial_connections:
                 ser = conn["serial"]
                 if ser.is_open:
