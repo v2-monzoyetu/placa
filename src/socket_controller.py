@@ -19,7 +19,8 @@ socket_code = ft.Text("Code: n/a", size=13, overflow=ft.TextOverflow.ELLIPSIS, m
 def conectar(e=None):
     """Tenta conectar ao servidor Socket.IO"""
     try:
-        sio.connect(sio_url)
+        if(sio.connected == False):
+            sio.connect(sio_url)
     except Exception as e:
         print(f"Erro ao conectar ao Socket.IO: {e} ❌")
 
@@ -35,15 +36,18 @@ def atualizar_status(data):
     if sio.connected:
         try:
             item = json.loads(data)
-            if all(key in item for key in ["id", "referencia", "password", "comando"]):
-                if item["referencia"] == "rasperry-pi4" and item["password"] == "123456":
-                    match item["comando"]:
-                        case "openDoor1":
-                            ativar_relay(34)
-                        case "openDoor2":
-                            ativar_relay(35)
+            if all(key in item for key in ["id", "referencia", "password", "comando", "userId"]):
+                if item["referencia"] == "orangepi5mx" and item["password"] == "123456":
+                    ativar_relay(34)
+                    payload = {
+                        "userId": item["userId"],
+                        "message": "O seu pedido foi realizado com sucesso!",
+                        "status": True
+                    }
+                    json_payload = json.dumps(payload)
+                    sio.emit("confirm", json_payload)
             else:
-                print("Chave 'referencia' não encontrada ❌")
+                print("Chave não encontrada ❌")
         except Exception as e:
             pass
 
@@ -51,23 +55,27 @@ def on_connect(page: ft.Page):
     """Atualiza o status da conexão"""
     try:
         socket_status.bgcolor = ft.Colors.GREEN
-        socket_status.content = ft.Text("ON")
+        socket_status.content = ft.Text("ON", size=12)
         socket_id.value = f"ID: {sio.sid}"
         socket_code.value = f"Code: {sio.transport()}"
     except Exception as e:
         print(f"Erro na conexão: {e}")
-    page.update()
+    socket_status.update()
+    socket_id.update()
+    socket_code.update()
 
 def on_disconnect(page: ft.Page):
     """Atualiza o status da interface ao desconectar"""
     try:
         socket_status.bgcolor = ft.Colors.RED
-        socket_status.content = ft.Text("OFF")
+        socket_status.content = ft.Text("OFF", size=12)
         socket_id.value = "ID: n/a"
         socket_code.value = "Code: n/a"
     except Exception as e:
         print(f"Erro na desconexão: {e}")
-    page.update()
+    socket_status.update()
+    socket_id.update()
+    socket_code.update()
 
 def register_socket_events(page):
     sio.on("message", atualizar_status)

@@ -56,10 +56,16 @@ def login(page: ft.Page, go_home):
             data = response.json()
 
             if response.status_code == 200 and "access_token" in data:
-                # Armazena o token na sessão
-                page.client_storage.set("token", data["access_token"])
-                page.update()
-                go_home()
+                req  = requests.post(API_URL+'/concierge/auth/me', headers={"Authorization": f"Bearer {data['access_token']}"})
+                user = req.json()
+                
+                if req.status_code == 200:
+                    page.client_storage.set("user", user)
+                    page.client_storage.set("token", data["access_token"])
+                    page.update()
+                    go_home()
+                else:
+                    show_snack_bar("Não foi possível obter os dados do usuário!", ft.Colors.RED)
             else:
                 show_snack_bar("Login falhou! Verifique as credenciais.", ft.Colors.ORANGE)
         
@@ -129,6 +135,6 @@ def login(page: ft.Page, go_home):
     # Layout da tela de login
     page.clean()
     page.add(container)
-    
+    page.on_keyboard_event = lambda e: login_attempt(e) if e.key == "Enter" and not is_loading else None
     page.add(snack_bar)
     page.update()

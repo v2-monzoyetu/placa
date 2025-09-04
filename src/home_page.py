@@ -6,15 +6,22 @@ import platform
 import threading
 import flet as ft
 from pynput import keyboard
+from local_database import dbemployee, dbresident, clear_database
 from util import is_valid_base64
 from api_client import get
-from widget import menubutton, button
+from widget import menubutton, button, create_drawer
 from gpio_controller import desativar_relay, ativar_relay
 from process_area import ProcessItem
 from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
 
-RUNNING_ON_PI = platform.system() == "Linux"
+#dependecias
+#python-socketio
+#pynput
+#python-periphery
+#socketio-client
+#pyserial
 
+RUNNING_ON_PI = platform.system() == "Linux"
 class Estado:
     def __init__(self):
         self.condominio_id = 0
@@ -23,7 +30,44 @@ class Estado:
 
 estado = Estado()
 
+# Classe para sincronização periódica
+class SetInterval:
+    def __init__(self, func, interval):
+        self.func       = func
+        self.interval   = interval
+        self.timer      = None
+        self.is_running = False
+
+    def start(self):
+        self.is_running = True
+        def wrapper():
+            if self.is_running:
+                self.func()
+                self.timer = threading.Timer(self.interval, wrapper)
+                self.timer.start()
+        self.timer = threading.Timer(self.interval, wrapper)
+        self.timer.start()
+
+    def cancel(self):
+        self.is_running = False
+        if self.timer:
+            self.timer.cancel()
+
+# Variável global para o temporizador
+sync_interval = None
+
 def home(page: ft.Page, go_login):
+
+    # Função para sincronizar dados
+    def sync_data():
+        print("Sincronizando dados...")
+        try:
+            employee_count = dbemployee(page)
+            resident_count = dbresident(page)
+            print(f"Sincronização concluída: {employee_count} funcionários e {resident_count} moradores atualizados")
+        except Exception as e:
+            print(f"Erro ao sincronizar: {e}")
+
 
     # SnackBar para feedback
     snack_bar = ft.SnackBar(content=ft.Text("", color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD), bgcolor=ft.Colors.GREY)
@@ -204,19 +248,18 @@ def home(page: ft.Page, go_login):
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-        
-    #checar codigo
-    def manual_check(check_type, modal, field):
-        code = field.value.strip()
-        if not code:
-            field.focus()
-            show_snack_bar("Insira um código válido!", ft.Colors.RED)
-            return
-        page.close(modal)
-        field.value = ""
-        add_item({"type": check_type, "code": code}, int(page.client_storage.get("default_gpio_number") or 34))
     
     def logout(e=None):
+        global sync_interval
+        # Cancelar sincronização periódica
+        if sync_interval and sync_interval.is_running:
+            sync_interval.cancel()
+            sync_interval = None
+            print("Sincronização periódica cancelada durante logout")
+        
+        # Limpar banco de dados
+        clear_database()
+        
         page.close(dlg_modal)
         page.client_storage.clear()
         go_login()
@@ -234,7 +277,37 @@ def home(page: ft.Page, go_login):
         actions_alignment=ft.MainAxisAlignment.END,
     )
     
-    morador_field  = ft.TextField(label="", autofocus=True, keyboard_type=ft.KeyboardType.NUMBER)
+    stored_visitor = page.client_storage.get("visitor")
+    visitor_value = (stored_visitor == "True") if stored_visitor is not None else True
+    visitor_modal = ft.AlertDialog(
+        modal=True,
+        content=ft.Column(
+        width=400.0,
+        wrap=False,
+        alignment=ft.MainAxisAlignment.CENTER,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=12.0,
+        tight=True,
+        controls=[
+            ft.ListTile(
+                content_padding=8.0,
+                title=ft.Text("Visitante", size=14),
+                subtitle=ft.Text("Permitir entrada de visitantes", size=13),
+                trailing=ft.Switch(
+                    value=visitor_value,
+                    on_change=lambda e: page.client_storage.set("visitor", str(e.control.value))
+                ),
+            )
+        ]
+        ),
+        actions=[
+            ft.TextButton("Fechar", on_click=lambda e: page.close(visitor_modal)),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    
+    stored_resident = page.client_storage.get("resident")
+    resident_value = (stored_resident == "True") if stored_resident is not None else True
     morador_modal = ft.AlertDialog(
         modal=True,
         content=ft.Column(
@@ -245,15 +318,15 @@ def home(page: ft.Page, go_login):
         spacing=12.0,
         tight=True,
         controls=[
-            ft.Image(
-                src=f"code.png",
-                width=200.0,
-                fit=ft.ImageFit.COVER,
-                repeat=ft.ImageRepeat.NO_REPEAT,
-            ),
-            ft.Text("Insira o número de Telefone do Morador", text_align=ft.TextAlign.CENTER),
-            morador_field,
-            button("Pesquisar", on_click=lambda e: manual_check('resident', morador_modal, morador_field))
+            ft.ListTile(
+                content_padding=8.0,
+                title=ft.Text("Morador", size=14),
+                subtitle=ft.Text("Permitir entrada de moradores", size=13),
+                trailing=ft.Switch(
+                    value=resident_value,
+                    on_change=lambda e: page.client_storage.set("resident", str(e.control.value))
+                ),
+            )
         ]
         ),
         actions=[
@@ -262,7 +335,8 @@ def home(page: ft.Page, go_login):
         actions_alignment=ft.MainAxisAlignment.END,
     )
     
-    funcionario_field  = ft.TextField(label="", autofocus=True, keyboard_type=ft.KeyboardType.NUMBER)
+    stored_employee = page.client_storage.get("employee")
+    employee_value = (stored_employee == "True") if stored_employee is not None else True    
     funcionario_modal = ft.AlertDialog(
         modal=True,
         content=ft.Column(
@@ -273,15 +347,15 @@ def home(page: ft.Page, go_login):
         spacing=12.0,
         tight=True,
         controls=[
-            ft.Image(
-                src=f"code.png",
-                width=200.0,
-                fit=ft.ImageFit.COVER,
-                repeat=ft.ImageRepeat.NO_REPEAT,
-            ),
-            ft.Text("Insira o código do Funcionário de 9 dígitos", text_align=ft.TextAlign.CENTER),
-            funcionario_field,
-            button("Pesquisar", on_click=lambda e: manual_check('employee', funcionario_modal, funcionario_field))
+            ft.ListTile(
+                content_padding=8.0,
+                title=ft.Text("Funcionário", size=14),
+                subtitle=ft.Text("Permitir entrada de funcionários", size=13),
+                trailing=ft.Switch(
+                    value=employee_value,
+                    on_change=lambda e: page.client_storage.set("employee", str(e.control.value))
+                ),
+            )
         ]
         ),
         actions=[
@@ -290,7 +364,8 @@ def home(page: ft.Page, go_login):
         actions_alignment=ft.MainAxisAlignment.END,
     )
     
-    veiculo_field  = ft.TextField(label="", autofocus=True)
+    stored_vehicle = page.client_storage.get("vehicle")
+    vehicle_value = (stored_vehicle == "True") if stored_vehicle is not None else True 
     veiculo_modal = ft.AlertDialog(
         modal=True,
         content=ft.Column(
@@ -301,15 +376,15 @@ def home(page: ft.Page, go_login):
         spacing=12.0,
         tight=True,
         controls=[
-            ft.Image(
-                src=f"code.png",
-                width=200.0,
-                fit=ft.ImageFit.COVER,
-                repeat=ft.ImageRepeat.NO_REPEAT,
-            ),
-            ft.Text("Insira a matrícula do Veículo", text_align=ft.TextAlign.CENTER),
-            veiculo_field,
-            button("Pesquisar", on_click=lambda e: manual_check('veiculo', veiculo_modal, veiculo_field))
+            ft.ListTile(
+                content_padding=8.0,
+                title=ft.Text("Veículo", size=14),
+                subtitle=ft.Text("Permitir entrada de veículos", size=13),
+                trailing=ft.Switch(
+                    value=vehicle_value,
+                    on_change=lambda e: page.client_storage.set("vehicle", str(e.control.value))
+                ),
+            )
         ]
         ),
         actions=[
@@ -342,6 +417,7 @@ def home(page: ft.Page, go_login):
         page.update()
     
     def get_condominios(e=None):
+        global sync_interval
         
         list_condominios.controls.clear()
         list_condominios.controls.append(ft.Container(
@@ -356,6 +432,7 @@ def home(page: ft.Page, go_login):
         
         if data:
             estado.condominio_id = page.client_storage.get("condominio_id") or int(data[0].get('id', '0'))
+            page.client_storage.set("condominio_id", estado.condominio_id)
             estado.condominio_list = data
 
             for item in data:
@@ -370,6 +447,14 @@ def home(page: ft.Page, go_login):
                         on_click=lambda e, item_id=item_id: select_condominio(item_id)
                     )
                 )
+            dbemployee(page)
+            dbresident(page)
+            
+            # Iniciar sincronização
+            if sync_interval is None or not sync_interval.is_running:
+                sync_interval = SetInterval(sync_data, 1200)  # 100 segundos = 1 minuto
+                sync_interval.start()
+                print("Sincronização periódica iniciada (intervalo: 10 minutos)")
         else:
             list_condominios.controls.append(
             ft.Container(
@@ -394,7 +479,7 @@ def home(page: ft.Page, go_login):
         expand=True,
         controls=[
             ft.Image(
-                src=f"empty.png",
+                src="empty.png",
                 width=280.0,
                 fit=ft.ImageFit.COVER,
                 repeat=ft.ImageRepeat.NO_REPEAT,
@@ -460,10 +545,12 @@ def home(page: ft.Page, go_login):
                                     spacing=8.0,
                                     expand=True,
                                     controls=[
-                                        menubutton("GPIO", ft.Icons.VIEW_COZY, ft.Colors.WHITE, show_gpio_config_dialog),
-                                        #menubutton("Veículos", ft.Icons.CAR_RENTAL_SHARP, "#A8E349", lambda e: page.open(veiculo_modal)),
-                                        #menubutton("Moradores", ft.Icons.PERSON, "#F858A2", lambda e: page.open(morador_modal)),
-                                        #menubutton("Funcionários", ft.Icons.GROUP, "#CB9EF6", lambda e: page.open(funcionario_modal)),
+                                        menubutton("Menu", ft.Icons.MENU, ft.Colors.WHITE,lambda e: page.open(create_drawer(page))),
+                                        menubutton("GPIO", ft.Icons.VIEW_COZY, "#A8E349", show_gpio_config_dialog),
+                                        menubutton("Visitante", ft.Icons.GROUPS_3, "#49D1E3", lambda e: page.open(visitor_modal)),
+                                        menubutton("Veículos", ft.Icons.CAR_RENTAL_SHARP, "#E3BA49", lambda e: page.open(veiculo_modal)),
+                                        menubutton("Moradores", ft.Icons.PERSON, "#F858A2", lambda e: page.open(morador_modal)),
+                                        menubutton("Funcionários", ft.Icons.GROUP, "#CB9EF6", lambda e: page.open(funcionario_modal)),
                                         ft.Container(expand=True),
                                         menubutton("Configurações", ft.Icons.SETTINGS, ft.Colors.WHITE, show_serial_config_dialog),
                                     ]

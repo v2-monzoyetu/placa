@@ -1,6 +1,7 @@
 import flet as ft
 import requests
 from api_client import API_URL
+from local_database import fetch_employee, fetch_resident
 from gpio_controller import ativar_relay
 from validator import validateResident, validateEmployee, validateVehicle, validateVisitor
 
@@ -26,6 +27,8 @@ class ProcessItem(ft.Column):
                     self.message = "Morador"
                 elif self.qrdata["type"] == "vehicle":
                     self.message = "Veículo"
+                elif self.qrdata["type"] == "visitor":
+                    self.message = "Visitante"
             else:
                 self.message = "Verificando..."
     
@@ -45,9 +48,20 @@ class ProcessItem(ft.Column):
             response     = verify.get("body", {})
             result       = response.get("result", {})
 
-            if result.get("success"):
+            if result.get("success") and result.get("success") == True:
                 item = result.get("data", {})
-                if self.qrdata.get("code") and len(self.qrdata.get("code")) == 20 or self.qrdata.get("code") and len(self.qrdata.get("code")) == 10:                    
+                if self.qrdata["type"] == "employee" or result.get("type") == "employee":
+                    stored_employee = self.page.client_storage.get("employee")
+                    employee_value = (stored_employee == "True") if stored_employee is not None else True 
+    
+                    if(item[0].get("status") == "0" or employee_value == False):
+                        self.tile.title.value = "Funcionário"
+                        self.tile.subtitle.value = "Desativado"
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                        self.update()
+                        return
+                    
+                    ativar_relay(self.gpio_number)
                     checkValidation = validateEmployee(self.page, item[0].get("id", "0"), item[0].get("situation", "n/a"))
                     if checkValidation:
                         self.tile.title.value = "Funcionário"
@@ -56,65 +70,87 @@ class ProcessItem(ft.Column):
                         self.process_area.controls.clear()
                         self.process_area.controls.append(process_status("Funcionário", funcionario=item[0]))
                         self.process_area.update()
-                    self.update()
-                else:
-                    if self.qrdata["type"] == "employee":
-                        ativar_relay(self.gpio_number)
-                        checkValidation = validateEmployee(self.page, item[0].get("id", "0"), item[0].get("situation", "n/a"))
-                        if checkValidation:
-                            self.tile.title.value = "Funcionário"
-                            self.tile.subtitle.value = item[0].get("nome", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                            self.process_area.controls.clear()
-                            self.process_area.controls.append(process_status("Funcionário", funcionario=item[0]))
-                            self.process_area.update()
-                        else:
-                            self.tile.title.value = "Funcionário"
-                            self.tile.subtitle.value = item[0].get("nome", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-                    elif self.qrdata["type"] == "resident":
-                        ativar_relay(self.gpio_number)
-                        checkValidation = validateResident(self.page, item[0].get("id", "0"), item[0].get("status", "1"))
-                        if checkValidation:
-                            self.tile.title.value = "Morador"
-                            self.tile.subtitle.value = item[0].get("nome", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                            self.process_area.controls.clear()
-                            self.process_area.controls.append(process_status("Morador", morador=item[0]))
-                            self.process_area.update()
-                        else:
-                            self.tile.title.value = "Morador"
-                            self.tile.subtitle.value = item[0].get("nome", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-                    elif self.qrdata["type"] == "vehicle":
-                        ativar_relay(self.gpio_number)
-                        checkValidation = validateVehicle(self.page, item.get("id", "0"), item.get("motoristas", {})[0].get("id", "0"), item.get("situation", "1"))
-                        if checkValidation:
-                            self.tile.title.value = "Veículo"
-                            self.tile.subtitle.value = item.get("matricula", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                            self.process_area.controls.clear()
-                            self.process_area.controls.append(process_status("Veículo", veiculo=item))
-                            self.process_area.update()
-                        else:
-                            self.tile.title.value = "Veículo"
-                            self.tile.subtitle.value = item[0].get("matricula", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-                    elif self.qrdata["type"] == "visitor":
-                        ativar_relay(self.gpio_number)
-                        checkValidation = validateVisitor(self.page, self.qrdata["code"])
-                        if checkValidation:
-                            self.tile.title.value = "Visitante"
-                            self.tile.subtitle.value = item.get("nome", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
-                            self.process_area.controls.clear()
-                            self.process_area.controls.append(process_status("Visitante", visitor=item))
-                            self.process_area.update()
-                        else:
-                            self.tile.title.value = "Visitante"
-                            self.tile.subtitle.value = item[0].get("nome", "n/a")
-                            self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
-                    self.update()
+                    else:
+                        self.tile.title.value = "Funcionário"
+                        self.tile.subtitle.value = item[0].get("nome", "Negado")
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                        
+                elif self.qrdata["type"] == "resident" or result.get("type") == "resident":
+                    stored_resident = self.page.client_storage.get("resident")
+                    resident_value = (stored_resident == "True") if stored_resident is not None else True
+                    
+                    if(resident_value == False):
+                        self.tile.title.value = "Morador"
+                        self.tile.subtitle.value = "Desativado"
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                        self.update()
+                        return
+                    
+                    ativar_relay(self.gpio_number)
+                    checkValidation = validateResident(self.page, item[0].get("id", "0"), item[0].get("status", "1"))
+                    if checkValidation:
+                        self.tile.title.value = "Morador"
+                        self.tile.subtitle.value = item[0].get("nome", "n/a")
+                        self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
+                        self.process_area.controls.clear()
+                        self.process_area.controls.append(process_status("Morador", morador=item[0]))
+                        self.process_area.update()
+                    else:
+                        self.tile.title.value = "Morador"
+                        self.tile.subtitle.value = item[0].get("nome", "Negado")
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                        
+                elif self.qrdata["type"] == "vehicle" or result.get("type") == "vehicle":
+                    stored_vehicle = self.page.client_storage.get("vehicle")
+                    vehicle_value = (stored_vehicle == "True") if stored_vehicle is not None else True 
+                    
+                    if(item.get("status") == "0" or vehicle_value == False):
+                        self.tile.title.value = "Veículo"
+                        self.tile.subtitle.value   = "Desativado"
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                        self.update()
+                        return
+                    
+                    ativar_relay(self.gpio_number)
+                    checkValidation = validateVehicle(self.page, item.get("id", "0"), item.get("motoristas", {})[0].get("id", "0"), item.get("situation", "1"))
+                    if checkValidation:
+                        self.tile.title.value = "Veículo"
+                        self.tile.subtitle.value = item.get("matricula", "n/a")
+                        self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
+                        self.process_area.controls.clear()
+                        self.process_area.controls.append(process_status("Veículo", veiculo=item))
+                        self.process_area.update()
+                    else:
+                        self.tile.title.value = "Veículo"
+                        self.tile.subtitle.value = item[0].get("matricula", "n/a")
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                        
+                elif self.qrdata["type"] == "visitor" or result.get("type") == "visitor":
+                    stored_visitor = self.page.client_storage.get("visitor")
+                    visitor_value = (stored_visitor == "True") if stored_visitor is not None else True
+                    
+                    if(visitor_value == False):
+                        self.tile.title.value = "Visitante"
+                        self.tile.subtitle.value = "Desativado"
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                        self.update()
+                        return
+                    
+                    ativar_relay(self.gpio_number)
+                    checkValidation = validateVisitor(self.page, self.qrdata["code"])
+                    if checkValidation:
+                        self.tile.title.value = "Visitante"
+                        self.tile.subtitle.value = item.get("nome", "n/a")
+                        self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
+                        self.process_area.controls.clear()
+                        self.process_area.controls.append(process_status("Visitante", visitor=item))
+                        self.process_area.update()
+                    else:
+                        self.tile.title.value = "Visitante"
+                        self.tile.subtitle.value = item[0].get("nome", "n/a")
+                        self.tile.trailing.content = ft.Icon(ft.Icons.ERROR, color=ft.Colors.YELLOW)
+                self.update()
+                
             else:
                 if(self.message == "Processando..." or self.message == "Verificando..."):
                     self.message = "Desconhecido"
@@ -136,16 +172,31 @@ class ProcessItem(ft.Column):
         """Verifica o QRCode."""
         token   = self.page.client_storage.get("token")
         headers = {"Authorization": f"Bearer {token}"}
-        if self.qrdata.get("code"):
-            if(len(self.qrdata.get("code")) == 20 or len(self.qrdata.get("code")) == 10):
-                param = f"?code={self.qrdata.get('code')}"
-                route = f"{API_URL}/v1/concierge/check/employee/{self.page.client_storage.get('condominio_id')}{param}"
-            else:
-                param = f"?code={self.qrdata.get('code')}"
-                route = f"{API_URL}/v1/concierge/check/visitor/{self.page.client_storage.get('condominio_id')}{param}"
+        if self.qrdata.get("code") and len(str(self.qrdata["code"])) == 6:
+            param = f"?code={self.qrdata.get('code')}"
+            route = f"{API_URL}/v1/concierge/check/visitor/{self.page.client_storage.get('condominio_id')}{param}"
         else:
+            if self.qrdata.get("code"):
+                self.qrdata["type"] = "all"
+            
+            try:
+                if self.qrdata.get("type") == "employee" or self.qrdata["type"] == "all":
+                    employee = fetch_employee(self.qrdata)
+                    if employee and len(employee) > 0:
+                        return {'body': {'result': {'type': 'employee', 'success': True, 'data': [employee]}}}
+
+                if  self.qrdata.get("type") == "resident" or self.qrdata["type"] == "all":
+                    resident = fetch_resident(self.qrdata)
+                    if resident and len(resident) > 0:
+                        return {'body': {'result': {'type': 'resident', 'success': True, 'data': [resident]}}}
+            
+            except Exception as e:
+                print(f"DEBUG: Erro ao buscar localmente: {str(e)}")
+                raise e
+            
             param = f"?id={self.qrdata.get('id')}&type={self.qrdata.get('type')}&code={self.qrdata.get('code')}"
             route = f"{API_URL}/v1/concierge/check/qrcode/{self.page.client_storage.get('condominio_id')}{param}"
+            
         try:
             response = requests.get(route, headers=headers, timeout=10)
             res_body = response.json()
