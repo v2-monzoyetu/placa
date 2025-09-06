@@ -4,6 +4,7 @@ import flet as ft
 import socketio
 from functools import partial
 from gpio_controller import ativar_relay
+from validator import validateResident
 
 sio = socketio.Client()
 sio_url = "https://socket.monzoyetu.com"
@@ -31,24 +32,30 @@ def desconectar(e=None):
     else:
         conectar()
 
-def atualizar_status(data):
+def atualizar_status(page: ft.Page, data):
     """Processa mensagens recebidas do servidor"""
     if sio.connected:
         try:
+            condominio_id = page.client_storage.get('condominio_id')
+            referencia    = page.client_storage.get('referencia')
+            password      = page.client_storage.get('password')
             item = json.loads(data)
-            if all(key in item for key in ["id", "referencia", "password", "comando", "userId"]):
-                if item["referencia"] == "orangepi5mx" and item["password"] == "123456":
-                    ativar_relay(34)
+            if all(key in item for key in ["condominio_id", "referencia", "password", "comando", "porta", "resident_id"]):
+                if item["referencia"] == referencia and item["password"] == password and item["condominio_id"] == condominio_id:
+                    ativar_relay(int(item["porta"]))
                     payload = {
-                        "userId": item["userId"],
+                        "resident_id": item["resident_id"],
                         "message": "O seu pedido foi realizado com sucesso!",
                         "status": True
                     }
                     json_payload = json.dumps(payload)
                     sio.emit("confirm", json_payload)
+                    #registanto entrada / saida
+                    validateResident(page, item["resident_id"], "1" if item["comando"] == 'ENTRY' else "0")
             else:
                 print("Chave não encontrada ❌")
         except Exception as e:
+            print(f"erro ao processar mensagem: {e} ❌")
             pass
 
 def on_connect(page: ft.Page):
@@ -56,8 +63,8 @@ def on_connect(page: ft.Page):
     try:
         socket_status.bgcolor = ft.Colors.GREEN
         socket_status.content = ft.Text("ON", size=12)
-        socket_id.value = f"ID: {sio.sid}"
-        socket_code.value = f"Code: {sio.transport()}"
+        socket_id.value       = f"ID: {sio.sid}"
+        socket_code.value     = f"Code: {sio.transport()}"
     except Exception as e:
         print(f"Erro na conexão: {e}")
     socket_status.update()
@@ -77,7 +84,10 @@ def on_disconnect(page: ft.Page):
     socket_id.update()
     socket_code.update()
 
-def register_socket_events(page):
-    sio.on("message", atualizar_status)
+def register_socket_events(page: ft.Page):
+    def handle_message(data):
+        atualizar_status(page, data)
+        
+    sio.on("message", handle_message)
     sio.on("connect", partial(on_connect, page=page))
     sio.on("disconnect", partial(on_disconnect, page=page))

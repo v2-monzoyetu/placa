@@ -1,5 +1,6 @@
 import flet as ft
 import requests
+from cached_network_image import cached_network_image
 from api_client import API_URL
 from local_database import fetch_employee, fetch_resident
 from gpio_controller import ativar_relay
@@ -236,21 +237,7 @@ def process_status(tipo: str, veiculo=None, morador=None, funcionario=None, visi
     elif tipo == "Morador" and morador:
         return ft.Column(
             controls=[
-                ft.Container(
-                    content=ft.Image(
-                        src=f"{imageLink}/storage/resident/{morador['foto'] if morador['foto'] else 'default.png'}",
-                        width=250,
-                        height=250,
-                        fit=ft.ImageFit.COVER,
-                        repeat=ft.ImageRepeat.NO_REPEAT,
-                        border_radius=ft.border_radius.all(250),),
-                    width=260,
-                    height=260,
-                    border=ft.border.all(5, ft.Colors.WHITE),
-                    border_radius=ft.border_radius.all(260),
-                    padding=5,
-                    alignment=ft.alignment.center,
-                ),
+                cached_network_image(f"{imageLink}/storage/resident/{morador['foto'] if morador['foto'] else 'default.png'}"),
                 ft.Text(tipo, style=style),
                 ft.Text(morador['nome'], style=style),
                 ft.Text(f"{morador['categoria']}: {morador['quadra']} - {morador['sub_categoria']}: {morador['lote']}", style=style),
@@ -261,21 +248,7 @@ def process_status(tipo: str, veiculo=None, morador=None, funcionario=None, visi
     elif tipo == "Funcionário" and funcionario:
         return ft.Column(
             controls=[
-                ft.Container(
-                    content=ft.Image(
-                    src=f"{imageLink}/storage/employees/{funcionario['foto'] if funcionario['foto'] else 'default.png'}",
-                    width=250.0,
-                    height=250.0,
-                    fit=ft.ImageFit.COVER,
-                    repeat=ft.ImageRepeat.NO_REPEAT,
-                    border_radius=ft.border_radius.all(250),),
-                    width=260,
-                    height=260,
-                    border=ft.border.all(5, ft.Colors.WHITE),
-                    border_radius=ft.border_radius.all(260),
-                    padding=5,
-                    alignment=ft.alignment.center,
-                ),
+                cached_network_image(f"{imageLink}/storage/employees/{funcionario['foto'] if funcionario['foto'] else 'default.png'}"),
                 ft.Text(tipo, style=style),
                 ft.Text(funcionario['nome'], style=style),
                 ft.Text(f"{funcionario['categoria']}: {funcionario['quadra']} - {funcionario['sub_categoria']}: {funcionario['lote']}", style=style),

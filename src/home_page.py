@@ -15,11 +15,13 @@ from process_area import ProcessItem
 from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
 
 #dependecias
+#requests
 #python-socketio
 #pynput
 #python-periphery
 #socketio-client
 #pyserial
+#pillow
 
 RUNNING_ON_PI = platform.system() == "Linux"
 class Estado:
@@ -85,13 +87,28 @@ def home(page: ft.Page, go_login):
         {"port": "/dev/ttyS1", "baud_rate": 9600, "gpio_number": 34, "type": "ENTRY"},
     ]
 
-    # Campos para o diálogo de configuração de portas seriais
+    # Campos para o diálogo de configuração de portas seriais e acesso remoto
     gpio_default_field = ft.TextField(
         label="GPIO Number default (ex.: 34)", 
         on_change=lambda e: page.client_storage.set("default_gpio_number", e.control.value), 
         keyboard_type=ft.KeyboardType.NUMBER, 
-        value=str(page.client_storage.get("default_gpio_number") or 34)
+        value=str(page.client_storage.get("default_gpio_number") or '34')
     )
+    
+    referencia_field = ft.TextField(
+        label="Referência", 
+        on_change=lambda e: page.client_storage.set("referencia", e.control.value), 
+        keyboard_type=ft.KeyboardType.TEXT, 
+        value=str(page.client_storage.get("referencia") or '')
+    )
+    
+    password_field = ft.TextField(
+        label="Password", 
+        on_change=lambda e: page.client_storage.set("password", e.control.value), 
+        keyboard_type=ft.KeyboardType.TEXT, 
+        value=str(page.client_storage.get("password") or '')
+    )
+        
     port_field = ft.TextField(label="Porta Serial (ex.: /dev/ttyS0)")
     baud_field = ft.TextField(label="Baud Rate (ex.: 9600)", keyboard_type=ft.KeyboardType.NUMBER)
     gpio_field = ft.TextField(label="GPIO Number (ex.: 34)", keyboard_type=ft.KeyboardType.NUMBER)
@@ -160,11 +177,11 @@ def home(page: ft.Page, go_login):
         modal=True,
         title_text_style=ft.TextStyle(size=17),
         title=ft.Text("Gerenciar portas seriais"),
-        content=ft.Column(
-            width=440,
-            wrap=False,
-            spacing=10.0,
-            tight=True,
+        content=ft.ListView(
+            width=450,
+            spacing=5.0,
+            padding=5.0,
+            expand=False,
             controls=[
                 gpio_default_field,
                 ft.Divider(),
@@ -202,6 +219,24 @@ def home(page: ft.Page, go_login):
                 ),
                 serial_configs_list,
                 button("Adicionar porta", on_click=add_serial_config),
+                ft.Divider(),
+                ft.Text("Acesso remoto", style=ft.TextStyle(size=17)),
+                ft.Row(
+                    wrap=True,
+                    expand=False,
+                    width=440,
+                    spacing=10.0,
+                    controls=[
+                        ft.Container(
+                            content=referencia_field,
+                            width=215
+                        ),
+                        ft.Container(
+                            content=password_field,
+                            width=215
+                        ),
+                    ]
+                ),
             ],
         ),
         actions=[
@@ -431,7 +466,7 @@ def home(page: ft.Page, go_login):
         list_condominios.controls.clear()
         
         if data:
-            estado.condominio_id = page.client_storage.get("condominio_id") or int(data[0].get('id', '0'))
+            estado.condominio_id   = page.client_storage.get("condominio_id") or int(data[0].get('id', '0'))
             page.client_storage.set("condominio_id", estado.condominio_id)
             estado.condominio_list = data
 
@@ -796,7 +831,6 @@ def home(page: ft.Page, go_login):
                 if ser.is_open:
                     ser.close()
                     print(f"Porta {ser.port} fechada.")
-            page.close()
 
         page.on_close = on_page_close
 
