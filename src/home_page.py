@@ -765,9 +765,7 @@ def home(page: ft.Page, go_login):
                 add_item({"code": result}, gpio_number, type)
             else:
                 show_snack_bar("QRCode inválido!", ft.Colors.RED)
-
         page.run_thread(process)
-
     
     # Configuração da porta serial
     if RUNNING_ON_PI:
