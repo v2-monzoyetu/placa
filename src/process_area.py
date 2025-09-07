@@ -69,7 +69,7 @@ class ProcessItem(ft.Column):
                         self.tile.subtitle.value = item[0].get("nome", "n/a")
                         self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
                         self.process_area.controls.clear()
-                        self.process_area.controls.append(process_status("Funcionário", funcionario=item[0]))
+                        self.process_area.controls.append(process_status(self.page, "Funcionário", funcionario=item[0]))
                         self.process_area.update()
                     else:
                         self.tile.title.value = "Funcionário"
@@ -94,7 +94,7 @@ class ProcessItem(ft.Column):
                         self.tile.subtitle.value = item[0].get("nome", "n/a")
                         self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
                         self.process_area.controls.clear()
-                        self.process_area.controls.append(process_status("Morador", morador=item[0]))
+                        self.process_area.controls.append(process_status(self.page, "Morador", morador=item[0]))
                         self.process_area.update()
                     else:
                         self.tile.title.value = "Morador"
@@ -119,7 +119,7 @@ class ProcessItem(ft.Column):
                         self.tile.subtitle.value = item.get("matricula", "n/a")
                         self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
                         self.process_area.controls.clear()
-                        self.process_area.controls.append(process_status("Veículo", veiculo=item))
+                        self.process_area.controls.append(process_status(self.page, "Veículo", veiculo=item))
                         self.process_area.update()
                     else:
                         self.tile.title.value = "Veículo"
@@ -144,7 +144,7 @@ class ProcessItem(ft.Column):
                         self.tile.subtitle.value = item.get("nome", "n/a")
                         self.tile.trailing.content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN)
                         self.process_area.controls.clear()
-                        self.process_area.controls.append(process_status("Visitante", visitor=item))
+                        self.process_area.controls.append(process_status(self.page, "Visitante", visitor=item))
                         self.process_area.update()
                     else:
                         self.tile.title.value = "Visitante"
@@ -220,7 +220,7 @@ def process_list_item(message: str, sub_message: str, trailing: str):
         ),
     )
 
-def process_status(tipo: str, veiculo=None, morador=None, funcionario=None, visitor=None):
+def process_status(page: ft.Page, tipo: str, veiculo=None, morador=None, funcionario=None, visitor=None):
     style = ft.TextStyle(size=30)
     if tipo == "Veículo" and veiculo:
         return ft.Column(
@@ -237,7 +237,7 @@ def process_status(tipo: str, veiculo=None, morador=None, funcionario=None, visi
     elif tipo == "Morador" and morador:
         return ft.Column(
             controls=[
-                cached_network_image(f"{imageLink}/storage/resident/{morador['foto'] if morador['foto'] else 'default.png'}"),
+                cached_network_image(page, f"{imageLink}/storage/resident/{morador['foto'] if morador['foto'] else 'default.jpg'}"),
                 ft.Text(tipo, style=style),
                 ft.Text(morador['nome'], style=style),
                 ft.Text(f"{morador['categoria']}: {morador['quadra']} - {morador['sub_categoria']}: {morador['lote']}", style=style),
@@ -248,7 +248,7 @@ def process_status(tipo: str, veiculo=None, morador=None, funcionario=None, visi
     elif tipo == "Funcionário" and funcionario:
         return ft.Column(
             controls=[
-                cached_network_image(f"{imageLink}/storage/employees/{funcionario['foto'] if funcionario['foto'] else 'default.png'}"),
+                cached_network_image(page, f"{imageLink}/storage/employees/{funcionario['foto'] if funcionario['foto'] else 'default.jpg'}"),
                 ft.Text(tipo, style=style),
                 ft.Text(funcionario['nome'], style=style),
                 ft.Text(f"{funcionario['categoria']}: {funcionario['quadra']} - {funcionario['sub_categoria']}: {funcionario['lote']}", style=style),

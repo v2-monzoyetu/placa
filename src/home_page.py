@@ -221,6 +221,7 @@ def home(page: ft.Page, go_login):
                 button("Adicionar porta", on_click=add_serial_config),
                 ft.Divider(),
                 ft.Text("Acesso remoto", style=ft.TextStyle(size=17)),
+                ft.Divider(),
                 ft.Row(
                     wrap=True,
                     expand=False,
@@ -489,7 +490,7 @@ def home(page: ft.Page, go_login):
             if sync_interval is None or not sync_interval.is_running:
                 sync_interval = SetInterval(sync_data, 1200)  # 100 segundos = 1 minuto
                 sync_interval.start()
-                print("Sincronização periódica iniciada (intervalo: 10 minutos)")
+                print("Sincronização periódica iniciada (intervalo: 20 minutos)")
         else:
             list_condominios.controls.append(
             ft.Container(
@@ -723,17 +724,14 @@ def home(page: ft.Page, go_login):
         nonlocal last_key_time, scanned_input
         current_time = time.time()
 
-        # Limpa o buffer se a sequência for interrompida (pausa maior que BUFFER_TIMEOUT)
         if current_time - last_key_time > BUFFER_TIMEOUT:
             scanned_input.clear()
 
         try:
-            # Captura caracteres alfanuméricos
             char = key.char
             if char:
                 scanned_input.append(char)
         except AttributeError:
-            # Detecta a tecla Enter para finalizar a leitura
             if key == keyboard.Key.enter:
                 qr_code = ''.join(scanned_input)
                 if qr_code:
@@ -754,18 +752,22 @@ def home(page: ft.Page, go_login):
     threading.Thread(target=start_listener, daemon=True).start()
     
     def scan_result(result: str, gpio_number: int, type: str = "ENTRY"):
-        """Processa o resultado escaneado."""
-        if is_valid_base64(result):
-            try:
-                value = base64.b64decode(result).decode("utf-8")
-                qrdata = json.loads(value)
-                add_item(qrdata, gpio_number, type)
-            except Exception as e:
-                show_snack_bar(f"Erro ao processar o QRCode: {str(e)}", ft.Colors.RED)
-        elif len(result.strip()) == 20 or len(result.strip()) == 10:
-            add_item({"code": result}, gpio_number, type)
-        else:
-            show_snack_bar("QRCode inválido!", ft.Colors.RED)
+        """Processa o resultado escaneado de forma thread-safe."""
+        def process():
+            if is_valid_base64(result):
+                try:
+                    value = base64.b64decode(result).decode("utf-8")
+                    qrdata = json.loads(value)
+                    add_item(qrdata, gpio_number, type)
+                except Exception as e:
+                    show_snack_bar(f"Erro ao processar o QRCode: {str(e)}", ft.Colors.RED)
+            elif len(result.strip()) == 20 or len(result.strip()) == 10:
+                add_item({"code": result}, gpio_number, type)
+            else:
+                show_snack_bar("QRCode inválido!", ft.Colors.RED)
+
+        page.run_thread(process)
+
     
     # Configuração da porta serial
     if RUNNING_ON_PI:

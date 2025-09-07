@@ -40,23 +40,41 @@ def atualizar_status(page: ft.Page, data):
             referencia    = page.client_storage.get('referencia')
             password      = page.client_storage.get('password')
             item = json.loads(data)
-            if all(key in item for key in ["condominio_id", "referencia", "password", "comando", "porta", "resident_id"]):
+            if all(key in item for key in ["condominio_id", "referencia", "password", "comando", "porta", "tipo"]):
                 if item["referencia"] == referencia and item["password"] == password and item["condominio_id"] == condominio_id:
                     ativar_relay(int(item["porta"]))
-                    payload = {
-                        "resident_id": item["resident_id"],
-                        "message": "O seu pedido foi realizado com sucesso!",
-                        "status": True
-                    }
+                    message = "O seu pedido foi realizado com sucesso!"
+                    if item["tipo"] == "doorman" and item["doorman_id"]:
+                        payload = {
+                            "doorman_id": item["doorman_id"],
+                            "message": message,
+                            "status": True,
+                            "type": item["tipo"],
+                        }
+                    elif item["tipo"] == "resident" and item["resident_id"]:
+                        payload = {
+                            "resident_id": item["resident_id"],
+                            "message": message,
+                            "status": True,
+                            "type": item["tipo"],
+                        }
+                    elif item["tipo"] == "adm" and item["adm_id"]:
+                        payload = {
+                            "adm_id": item["adm_id"],
+                            "message": message,
+                            "status": True,
+                            "type": item["tipo"],
+                        }
+                        
                     json_payload = json.dumps(payload)
                     sio.emit("confirm", json_payload)
                     #registanto entrada / saida
-                    validateResident(page, item["resident_id"], "1" if item["comando"] == 'ENTRY' else "0")
+                    if item["tipo"] == "resident" and item["resident_id"]:
+                        validateResident(page, item["resident_id"], "1" if item["comando"] == 'ENTRY' else "0")
             else:
                 print("Chave não encontrada ❌")
         except Exception as e:
             print(f"erro ao processar mensagem: {e} ❌")
-            pass
 
 def on_connect(page: ft.Page):
     """Atualiza o status da conexão"""
