@@ -2,7 +2,7 @@ import requests
 import flet as ft
 from api_client import API_URL
 
-def validateResident(page: ft.Page, id, status):
+def validateResident(page: ft.Page, id, status, reader_type: str = ''):
     """Verifica o QRCode."""
 
     token = page.client_storage.get("token")
@@ -11,7 +11,7 @@ def validateResident(page: ft.Page, id, status):
     route = f"{API_URL}/v1/concierge/valid/resident/{page.client_storage.get('condominio_id')}"
 
     try:
-        response = requests.post(route, params={"id": id, "status": status}, headers=headers, timeout=10)
+        response = requests.post(route, params={"id": id, "status": status, "type": reader_type}, headers=headers, timeout=10)
         response.raise_for_status()
         if response.status_code == 200:
             return True
@@ -21,7 +21,7 @@ def validateResident(page: ft.Page, id, status):
     except Exception as e:
         return False
         
-def validateEmployee(page: ft.Page, id, situation):
+def validateEmployee(page: ft.Page, id, situation, reader_type: str = ''):
     """Verifica o QRCode."""
 
     token = page.client_storage.get("token")
@@ -30,7 +30,7 @@ def validateEmployee(page: ft.Page, id, situation):
     route = f"{API_URL}/v1/concierge/valid/employee/{page.client_storage.get('condominio_id')}"
 
     try:
-        response = requests.post(route, params={"id": id, "situation": situation}, headers=headers, timeout=10)
+        response = requests.post(route, params={"id": id, "situation": situation, "type": reader_type}, headers=headers, timeout=10)
         response.raise_for_status()
         if response.status_code == 200:
             return True
@@ -39,7 +39,7 @@ def validateEmployee(page: ft.Page, id, situation):
     except Exception as e:
         return False   
 
-def validateVehicle(page: ft.Page, id, motoristaId, status):
+def validateVehicle(page: ft.Page, id, motoristaId, status, reader_type: str = ''):
     """Verifica o QRCode."""
 
     token = page.client_storage.get("token")
@@ -48,7 +48,7 @@ def validateVehicle(page: ft.Page, id, motoristaId, status):
     route = f"{API_URL}/v1/concierge/viatura/{page.client_storage.get('condominio_id')}"
 
     try:
-        response = requests.post(route, params={"id": id, "status": status, "motoristaId": motoristaId}, headers=headers, timeout=10)
+        response = requests.post(route, params={"id": id, "status": status, "motoristaId": motoristaId, "type": reader_type}, headers=headers, timeout=10)
         response.raise_for_status()
         if response.status_code == 200:
             return True

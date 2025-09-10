@@ -295,9 +295,11 @@ def home(page: ft.Page, go_login):
         
         # Limpar banco de dados
         clear_database()
-        time.sleep(0.5)  # Pequena pausa para garantir que o banco foi limpo
+        time.sleep(0.3)  # Pequena pausa para garantir que o banco foi limpo
         page.close(dlg_modal)
-        page.client_storage.clear()
+        page.client_storage.remove("user")
+        page.client_storage.remove("token")
+        time.sleep(0.2)
         go_login()
         
     # Criando o AlertDialog

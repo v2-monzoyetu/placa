@@ -63,7 +63,7 @@ class ProcessItem(ft.Column):
                         return
                     
                     ativar_relay(self.gpio_number)
-                    checkValidation = validateEmployee(self.page, item[0].get("id", "0"), item[0].get("situation", "n/a"))
+                    checkValidation = validateEmployee(self.page, item[0].get("id", "0"), item[0].get("situation", "n/a"), self.reader_type)
                     if checkValidation:
                         self.tile.title.value = "Funcionário"
                         self.tile.subtitle.value = item[0].get("nome", "n/a")
@@ -88,7 +88,7 @@ class ProcessItem(ft.Column):
                         return
                     
                     ativar_relay(self.gpio_number)
-                    checkValidation = validateResident(self.page, item[0].get("id", "0"), item[0].get("status", "1"))
+                    checkValidation = validateResident(self.page, item[0].get("id", "0"), item[0].get("status", "1"), self.reader_type)
                     if checkValidation:
                         self.tile.title.value = "Morador"
                         self.tile.subtitle.value = item[0].get("nome", "n/a")
@@ -113,7 +113,7 @@ class ProcessItem(ft.Column):
                         return
                     
                     ativar_relay(self.gpio_number)
-                    checkValidation = validateVehicle(self.page, item.get("id", "0"), item.get("motoristas", {})[0].get("id", "0"), item.get("situation", "1"))
+                    checkValidation = validateVehicle(self.page, item.get("id", "0"), item.get("motoristas", {})[0].get("id", "0"), item.get("situation", "1"), self.reader_type)
                     if checkValidation:
                         self.tile.title.value = "Veículo"
                         self.tile.subtitle.value = item.get("matricula", "n/a")
