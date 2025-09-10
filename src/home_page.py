@@ -59,6 +59,8 @@ class SetInterval:
 sync_interval = None
 
 def home(page: ft.Page, go_login):
+    last_scan = {"code": None, "time": 0}
+    SCAN_DELAY = 1.5
 
     # Função para sincronizar dados
     def sync_data():
@@ -755,6 +757,17 @@ def home(page: ft.Page, go_login):
     
     def scan_result(result: str, gpio_number: int, type: str = "ENTRY"):
         """Processa o resultado escaneado de forma thread-safe."""
+        
+        current_time = time.time()
+
+        # Verificar duplicado recente
+        if last_scan["code"] == result and (current_time - last_scan["time"]) < SCAN_DELAY:
+            return  # Ignora a leitura
+
+        # Atualiza último scan
+        last_scan["code"] = result
+        last_scan["time"] = current_time
+    
         def process():
             if is_valid_base64(result):
                 try:
