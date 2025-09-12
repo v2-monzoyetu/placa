@@ -295,12 +295,18 @@ def home(page: ft.Page, go_login):
             sync_interval = None
             print("Sincronização periódica cancelada durante logout")
         
+        for conn in serial_connections:
+            ser = conn["serial"]
+            if ser.is_open:
+                ser.close()
+                    
         # Limpar banco de dados
         clear_database()
         time.sleep(0.3)  # Pequena pausa para garantir que o banco foi limpo
         page.close(dlg_modal)
         page.client_storage.remove("user")
         page.client_storage.remove("token")
+        page.client_storage.remove("condominio_id")
         time.sleep(0.2)
         go_login()
         
@@ -783,11 +789,10 @@ def home(page: ft.Page, go_login):
         page.run_thread(process)
     
     # Configuração da porta serial
+    serial_connections = []
     if RUNNING_ON_PI:
-        serial_connections = []
         for config in estado.serial_configs:
             try:
-                
                 # Inicializa o GPIO como desligado
                 try:
                     desativar_relay(config["gpio_number"])
