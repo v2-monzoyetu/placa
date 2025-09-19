@@ -562,7 +562,7 @@ def home(page: ft.Page, go_login):
         try:
             process_item = ProcessItem(page, show_snack_bar, process_area, qrdata, gpio_number, type, on_complete_callback=update_length)
             
-            if len(list_process.controls) > 50:
+            if len(list_process.controls) > 15:
                 clear_process(None)
             list_process.controls.insert(0, process_item)
             update_length()
