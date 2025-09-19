@@ -13,6 +13,7 @@ from widget import menubutton, button, create_drawer
 from gpio_controller import desativar_relay, ativar_relay
 from process_area import ProcessItem
 from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
+import atexit
 
 #dependecias
 #requests
@@ -44,7 +45,10 @@ class SetInterval:
         self.is_running = True
         def wrapper():
             if self.is_running:
-                self.func()
+                try:
+                    self.func()
+                except Exception as e:
+                    print(f"Erro no SetInterval: {e}")
                 self.timer = threading.Timer(self.interval, wrapper)
                 self.timer.start()
         self.timer = threading.Timer(self.interval, wrapper)
@@ -463,57 +467,71 @@ def home(page: ft.Page, go_login):
         page.update()
     
     def get_condominios(e=None):
-        global sync_interval
-        
-        list_condominios.controls.clear()
-        list_condominios.controls.append(ft.Container(
-            padding=12.0,
-            alignment=ft.alignment.center,
-            content=ft.ProgressRing()
-        ))
-        page.update()
-        
-        data = get(page, "/v1/concierge/condominios")
-        list_condominios.controls.clear()
-        
-        if data:
-            estado.condominio_id   = page.client_storage.get("condominio_id") or int(data[0].get('id', '0'))
-            page.client_storage.set("condominio_id", estado.condominio_id)
-            estado.condominio_list = data
-
-            for item in data:
-                item_id = item.get('id', '0')
-                list_condominios.controls.append(
-                    ft.ListTile(
-                        selected=True if estado.condominio_id == int(item.get('id', '0')) else False,
-                        content_padding=8.0,
-                        title  =ft.Text(item.get('nome', 'n/a'), size=13),
-                        subtitle=ft.Text(item.get('telefone', 'n/a'), size=12),
-                        trailing=ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT),
-                        on_click=lambda e, item_id=item_id: select_condominio(item_id)
-                    )
-                )
-            dbemployee(page)
-            dbresident(page)
+        try:
+            global sync_interval
             
-            # Iniciar sincronização
-            if sync_interval is None or not sync_interval.is_running:
-                sync_interval = SetInterval(sync_data, 1200)  # 100 segundos = 1 minuto
-                sync_interval.start()
-                print("Sincronização periódica iniciada (intervalo: 20 minutos)")
-        else:
-            list_condominios.controls.append(
-            ft.Container(
+            list_condominios.controls.clear()
+            list_condominios.controls.append(ft.Container(
                 padding=12.0,
-                content=ft.Text("Nenhum resultado encontrado", 
-                    color=ft.Colors.WHITE,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                    max_lines=1,
-                    text_align=ft.TextAlign.CENTER
-                )
+                alignment=ft.alignment.center,
+                content=ft.ProgressRing()
             ))
-        page.update()
-    
+            page.update()
+            
+            data = get(page, "/v1/concierge/condominios")
+            list_condominios.controls.clear()
+            
+            if data:
+                estado.condominio_id   = page.client_storage.get("condominio_id") or int(data[0].get('id', '0'))
+                page.client_storage.set("condominio_id", estado.condominio_id)
+                estado.condominio_list = data
+
+                for item in data:
+                    item_id = item.get('id', '0')
+                    list_condominios.controls.append(
+                        ft.ListTile(
+                            selected=True if estado.condominio_id == int(item.get('id', '0')) else False,
+                            content_padding=8.0,
+                            title  =ft.Text(item.get('nome', 'n/a'), size=13),
+                            subtitle=ft.Text(item.get('telefone', 'n/a'), size=12),
+                            trailing=ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT),
+                            on_click=lambda e, item_id=item_id: select_condominio(item_id)
+                        )
+                    )
+                dbemployee(page)
+                dbresident(page)
+                
+                # Iniciar sincronização
+                if sync_interval is None or not sync_interval.is_running:
+                    sync_interval = SetInterval(sync_data, 1200)  # 100 segundos = 1 minuto
+                    sync_interval.start()
+                    print("Sincronização periódica iniciada (intervalo: 20 minutos)")
+            else:
+                list_condominios.controls.append(
+                ft.Container(
+                    padding=12.0,
+                    content=ft.Text("Nenhum resultado encontrado", 
+                        color=ft.Colors.WHITE,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        max_lines=1,
+                        text_align=ft.TextAlign.CENTER
+                    )
+                ))
+            page.update()
+        except Exception as e:
+            show_snack_bar(f"Erro ao conectar à API: {str(e)}", ft.Colors.RED)
+            list_condominios.controls.append(
+                ft.Container(
+                    padding=12.0,
+                    content=ft.Text("Erro ao carregar condomínios", 
+                        color=ft.Colors.WHITE,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        max_lines=1,
+                        text_align=ft.TextAlign.CENTER
+                    )
+                ))
+            page.update()
+
     #Lista de processos 
     list_process  = ft.ListView(expand=True, spacing=1, padding=0.0, reverse=False)
     count_process = ft.Text(f"Processos ativos: ({len(list_process.controls)})", size=14, weight=ft.FontWeight.BOLD)
@@ -543,7 +561,7 @@ def home(page: ft.Page, go_login):
         try:
             process_item = ProcessItem(page, show_snack_bar, process_area, qrdata, gpio_number, type, on_complete_callback=update_length)
             
-            if len(list_process.controls) > 100:
+            if len(list_process.controls) > 50:
                 clear_process(None)
             list_process.controls.insert(0, process_item)
             update_length()
@@ -755,38 +773,48 @@ def home(page: ft.Page, go_login):
 
     # Inicia o listener de teclado em uma thread separada
     def start_listener():
-        with keyboard.Listener(on_press=on_press) as listener:
-            listener.join()
+        try:
+            with keyboard.Listener(on_press=on_press) as listener:
+                listener.join()
+        except Exception as e:
+            print(f"Erro no listener de teclado: {e}")
 
     # Inicia a thread do pynput
     threading.Thread(target=start_listener, daemon=True).start()
     
     def scan_result(result: str, gpio_number: int, type: str = "ENTRY"):
-        """Processa o resultado escaneado de forma thread-safe."""
+        try:
+            """Processa o resultado escaneado de forma thread-safe."""
+            current_time = time.time()
+
+            # Verificar duplicado recente
+            if last_scan["code"] == result and (current_time - last_scan["time"]) < SCAN_DELAY:
+                return  # Ignora a leitura
+
+            # Atualiza último scan
+            last_scan["code"] = result
+            last_scan["time"] = current_time
         
-        current_time = time.time()
+            def process():
+                if is_valid_base64(result):
+                    try:
+                        value = base64.b64decode(result).decode("utf-8")
+                        qrdata = json.loads(value)
+                        add_item(qrdata, gpio_number, type)
+                    except Exception as e:
+                        show_snack_bar(f"Erro ao processar o QRCode: {str(e)}", ft.Colors.RED)
+                elif len(result.strip()) == 20 or len(result.strip()) == 10:
+                    add_item({"code": result}, gpio_number, type)
+                else:
+                    show_snack_bar("QRCode inválido!", ft.Colors.RED)
 
-        # Verificar duplicado recente
-        if last_scan["code"] == result and (current_time - last_scan["time"]) < SCAN_DELAY:
-            return  # Ignora a leitura
+            try:
+                page.run_thread(process)
+            except Exception as e:
+                print(f"Erro thread process: {e}")
 
-        # Atualiza último scan
-        last_scan["code"] = result
-        last_scan["time"] = current_time
-    
-        def process():
-            if is_valid_base64(result):
-                try:
-                    value = base64.b64decode(result).decode("utf-8")
-                    qrdata = json.loads(value)
-                    add_item(qrdata, gpio_number, type)
-                except Exception as e:
-                    show_snack_bar(f"Erro ao processar o QRCode: {str(e)}", ft.Colors.RED)
-            elif len(result.strip()) == 20 or len(result.strip()) == 10:
-                add_item({"code": result}, gpio_number, type)
-            else:
-                show_snack_bar("QRCode inválido!", ft.Colors.RED)
-        page.run_thread(process)
+        except Exception as e:
+            print(f"{e}")
     
     # Configuração da porta serial
     serial_connections = []
@@ -810,7 +838,7 @@ def home(page: ft.Page, go_login):
                 )
                 serial_connections.append({"serial": ser, "gpio_number": config["gpio_number"], "type": config["type"]})
                 print(f"Conectado à porta {config['port']} com baud rate {config['baud_rate']}, GPIO {config['gpio_number']}")
-            except serial.SerialException as e:
+            except Exception as e:
                 print(f"Erro ao abrir a porta {config['port']}: {e}")
                 continue
 
@@ -820,12 +848,11 @@ def home(page: ft.Page, go_login):
                 try:
                     if ser.in_waiting > 0:
                         data = ser.read(ser.in_waiting).decode('utf-8', errors='ignore').strip()
-                        if data:  # Processa apenas se houver dados válidos
-                            print(f"Dados brutos recebidos de {port_name} (GPIO {gpio_number}): {repr(data)}")
+                        if data:
                             print(f"QR code processado de {port_name} (GPIO {gpio_number}): {data}")
                             scan_result(data, gpio_number, type)
-                    time.sleep(0.1)  # Igual ao código de teste
-                except serial.SerialException as e:
+                    time.sleep(0.2)
+                except Exception as e:
                     print(f"Erro na leitura da porta {port_name}: {e}")
                     time.sleep(1)
 
@@ -853,6 +880,7 @@ def home(page: ft.Page, go_login):
                     print(f"Porta {ser.port} fechada.")
 
         page.on_close = on_page_close
+        atexit.register(on_page_close)
 
     page.clean()
     page.add(pagelet)
