@@ -5,9 +5,21 @@ import socketio
 from functools import partial
 from gpio_controller import ativar_relay
 from validator import validateResident
+import time
 
-sio = socketio.Client()
+sio = socketio.Client(reconnection=True)
 sio_url = "https://socket.monzoyetu.com"
+
+def reconectar():
+    while True:
+        if not sio.connected:
+            try:
+                print("Tentando conectar ao servidor...")
+                sio.connect(sio_url)
+                print("✅ Conectado com sucesso!")
+            except Exception as e:
+                print(f"❌ Falha na conexão: {e}")
+        time.sleep(5)
 
 # Variáveis da interface
 socket_status = ft.CircleAvatar(
@@ -24,6 +36,7 @@ def conectar(e=None):
             sio.connect(sio_url)
     except Exception as e:
         print(f"Erro ao conectar ao Socket.IO: {e} ❌")
+        reconectar()
 
 def desconectar(e=None):
     """Desconecta do servidor Socket.IO"""

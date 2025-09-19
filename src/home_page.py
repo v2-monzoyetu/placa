@@ -16,6 +16,7 @@ from socket_controller import conectar, desconectar, socket_status, socket_id, s
 import atexit
 
 #dependecias
+#retrying
 #requests
 #python-socketio
 #pynput
@@ -465,7 +466,7 @@ def home(page: ft.Page, go_login):
                 )
             )
         page.update()
-    
+
     def get_condominios(e=None):
         try:
             global sync_interval
