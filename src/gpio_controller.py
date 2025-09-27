@@ -12,6 +12,8 @@ if RUNNING_ON_PI:
             gpio.write(False)
             time.sleep(1)
             gpio.write(True)
+            time.sleep(10)
+            ativar_relay(35)
             gpio.close()
         except Exception as e:
             print(f"Erro ao controlar o relé no GPIO {gpio_number}: {e}")

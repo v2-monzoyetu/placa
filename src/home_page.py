@@ -806,6 +806,8 @@ def home(page: ft.Page, go_login):
                         show_snack_bar(f"Erro ao processar o QRCode: {str(e)}", ft.Colors.RED)
                 elif len(result.strip()) == 20 or len(result.strip()) == 10:
                     add_item({"code": result}, gpio_number, type)
+                elif result == "EXIT":
+                    ativar_relay(34)
                 else:
                     show_snack_bar("QRCode inválido!", ft.Colors.RED)
 
