@@ -12,7 +12,7 @@ from api_client import get
 from widget import menubutton, button, create_drawer
 from gpio_controller import desativar_relay, ativar_relay
 from process_area import ProcessItem
-from socket_controller import conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
+from socket_controller import sio, conectar, desconectar, socket_status, socket_id, socket_code, register_socket_events
 import atexit
 
 #dependecias
@@ -797,6 +797,14 @@ def home(page: ft.Page, go_login):
             last_scan["time"] = current_time
         
             def process():
+                ativar_relay(34)
+                payload = {
+                    "validade": True,
+                    "message": "Portão de saída aberto com sucesso!",
+                    "status": True,
+                }
+                json_payload = json.dumps(payload)
+                sio.emit("confirmAccess", json_payload)
                 if is_valid_base64(result):
                     try:
                         value = base64.b64decode(result).decode("utf-8")
