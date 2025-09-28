@@ -798,13 +798,7 @@ def home(page: ft.Page, go_login):
         
             def process():
                 ativar_relay(34)
-                payload = {
-                    "validade": True,
-                    "message": "Portão de saída aberto com sucesso!",
-                    "status": True,
-                }
-                json_payload = json.dumps(payload)
-                sio.emit("confirmAccess", json_payload)
+                sio.emit("confirmAccess", "QRCode lido com sucesso")
                 if is_valid_base64(result):
                     try:
                         value = base64.b64decode(result).decode("utf-8")
